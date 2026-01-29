@@ -1,0 +1,64 @@
+<div class="card ticketCard" data-instance-id="{{inst.id}}">
+  <div class="row" style="align-items:center;">
+    <div style="font-weight:900;">{{inst.template.title}}</div>
+    <div class="spacer"></div>
+    <div class="pill small">{{inst.points_awarded}} pts</div>
+  </div>
+
+  <div class="muted" style="margin-top:4px;">
+    <span class="dot" style="background: {{inst.assigned_kid.color}}"></span>
+    {{inst.assigned_kid.name}}
+  </div>
+
+  {% if inst.status.value != "done" %}
+    <label class="muted" style="display:block;margin-top:8px;">Details (editable)</label>
+    <textarea
+      data-details-for="{{inst.id}}"
+      onblur="saveDetails({{inst.id}})"
+      placeholder="e.g., Cleaned the car / vacuumed the rug"
+    >{{inst.details}}</textarea>
+  {% else %}
+    {% if inst.details %}
+      <div class="muted" style="margin-top:8px;"><strong>Details:</strong> {{inst.details}}</div>
+    {% endif %}
+    <div class="muted" style="margin-top:6px;">
+      {{ inst.approved_at | format_approved }} 🎉 <strong>Click collect to earn points! </strong> 🎉
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <form method="post"
+            action="{{ url_for('collect_route', instance_id=inst.id) }}"
+            onsubmit="return handleCollectSubmit(event);">
+        <input type="hidden" name="acting_kid" value="{{ acting_kid }}">
+        <button class="btn primary" type="submit">Collect</button>
+      </form>
+    </div>
+  {% endif %}
+
+  {% if inst.status.value == "review" and gm_unlocked %}
+    <div class="row" style="margin-top:10px;">
+      <form method="post" action="{{ url_for('approve_route', instance_id=inst.id) }}">
+        <input type="hidden" name="acting_kid" value="{{ acting_kid }}">
+        <button class="btn primary" type="submit">Approve</button>
+      </form>
+      <form method="post" action="{{ url_for('reject_route', instance_id=inst.id) }}">
+        <input type="hidden" name="acting_kid" value="{{ acting_kid }}">
+        <button class="btn" type="submit">Reject</button>
+      </form>
+    </div>
+  {% elif inst.status.value == "review" and not gm_unlocked %}
+    <div class="muted" style="margin-top:10px;">
+      Waiting for Game Master approval.
+    </div>
+  {% endif %}
+
+  {% if gm_unlocked %}
+    <div class="row" style="margin-top:10px;">
+      <form method="post" action="{{ url_for('delete_instance', instance_id=inst.id) }}"
+            onsubmit="return confirm('Delete this ticket? This will also remove linked points ledger entries.');">
+        <input type="hidden" name="acting_kid" value="{{ acting_kid }}">
+        <button class="btn danger" type="submit">Delete</button>
+      </form>
+    </div>
+  {% endif %}
+</div>

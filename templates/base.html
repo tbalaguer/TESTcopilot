@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{{ title or "Family Board" }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+    <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+    <script defer src="{{ url_for('static', filename='board.js') }}"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand"><a href="{{ url_for('board') }}" class="brandLink">Family Board</a></div>
+      <div class="spacer"></div>
+
+      {% if user %}
+        {# Game Master button to the LEFT of Logout #}
+        {% if user.role.value == "gamemaster" %}
+          {% if gm_unlocked %}
+            <form method="post" action="{{ url_for('gamemaster_lock') }}">
+              <button class="btn gm gm-on" type="submit">Game Master (Unlocked)</button>
+            </form>
+          {% else %}
+            <button class="btn gm" type="button" onclick="unlockGamemaster()">Game Master</button>
+          {% endif %}
+        {% endif %}
+
+        <form method="post" action="{{ url_for('logout') }}">
+          <button class="btn">Logout</button>
+        </form>
+      {% endif %}
+    </header>
+
+    <main class="container">
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

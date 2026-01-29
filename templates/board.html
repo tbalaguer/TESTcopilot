@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="row">
+  <div class="card" style="flex: 1;">
+    <!-- Top bar: Players (left) + Archive (right). Gamemaster moved to base.html next to Logout -->
+    <div class="row" style="align-items:center;">
+      <h2 style="margin:0;">Players</h2>
+      <div class="spacer"></div>
+
+      <a class="btn" href="{{ url_for('archive') }}">Treasure Chest</a>
+    </div>
+
+    <div class="row" style="margin-top:10px; align-items:flex-start;">
+      <!-- Left side: PLAYER_VISUAL (filters board) -->
+      <div style="flex: 1;">
+        <div class="kidbar">
+          {% for k in kids %}
+            <a class="kidchip {% if acting_kid==k.id %}active{% else %}inactive{% endif %}"
+               href="{{ url_for('board', acting_kid=k.id) }}"
+               style="border-color: {{k.color}}">
+              <span class="dot" style="background: {{k.color}}"></span>
+              {{k.name}}: <strong>{{ balances[k.id] }}</strong> pts
+            </a>
+          {% endfor %}
+        </div>
+        <div class="muted" style="margin-top:6px;">
+          Board is filtered to the active player.
+        </div>
+      </div>
+
+      <!-- Right side: Wallet button for the currently active player -->
+      <div class="filter" style="margin-left:auto; text-align:right;">
+        <strong>Wallet:</strong>
+        <div class="row" style="justify-content:flex-end;">
+          <form method="get" action="{{ url_for('ledger', kid_id=acting_kid) }}">
+            <button class="btn" type="submit">
+              {{ kids | selectattr("id", "equalto", acting_kid) | map(attribute="name") | first }}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="board">
+
+  <!-- Quest Board: normal (expanded) -->
+  <aside class="pool" id="poolDrawer">
+    <div class="poolHeader">
+      <div>
+        <h3 style="margin:0;">Quest Board</h3>
+        <div class="muted">{{ pool|length }} available (drag to On an Adventure)</div>
+      </div>
+      <div class="row">
+        <form method="post" action="{{ url_for('pool_refresh') }}">
+          <input type="hidden" name="acting_kid" value="{{ acting_kid }}">
+          <button class="btn" type="submit">Refresh</button>
+        </form>
+        <button class="btn" type="button" onclick="togglePool()">Collapse</button>
+      </div>
+    </div>
+
+    {% if gm_unlocked %}
+      <form method="post" action="{{ url_for('create_template') }}" class="card stack" style="margin: 12px 0;">
+        <strong>Create predefined task</strong>
+        <input name="title" placeholder="e.g., Clean something" required />
+        <input name="default_points" type="number" min="1" value="5" />
+        <textarea name="help_text" placeholder="Help text (optional)"></textarea>
+        <button class="btn primary" type="submit">Add to pool</button>
+      </form>
+    {% else %}
+      <div class="card" id="gmLockedCard" style="margin: 12px 0; background: rgba(17,31,56,.55);">
+        <strong>Game Master locked</strong>
+        <div class="muted" style="margin-top:6px;">Unlock to create or delete templates.</div>
+      </div>
+    {% endif %}
+
+    <div class="list" id="poolList" data-acting-kid="{{acting_kid}}">
+      {% for t in pool %}
+        <div class="ticket poolTemplate" data-template-id="{{t.id}}">
+          <div class="row" style="align-items:center;">
+            <div>
+              <div class="ticketTitle">{{t.title}}</div>
+              <div class="ticketMeta">{{t.default_points}} pts</div>
+            </div>
+            <div class="spacer"></div>
+
+            {% if gm_unlocked %}
+              <form method="post" action="{{ url_for('delete_template', template_id=t.id) }}"
+                    onsubmit="return confirm('Delete template? This is only allowed if no instances exist for it.');">
+                <button class="btn danger" type="submit">Delete</button>
+              </form>
+            {% endif %}
+          </div>
+
+          {% if t.help_text %}<div class="muted" style="margin-top:6px;">{{t.help_text}}</div>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </aside>
+
+  <!-- Quest Board: collapsed (mini column) -->
+  <aside class="poolMini" id="poolMini" style="visibility:hidden; width:0; opacity:0;">
+    <div class="poolMiniHeader" title="Show Quest Board">
+      <button class="poolMiniButton" type="button" onclick="togglePool()">⇥</button>
+    </div>
+  </aside>
+
+  <!-- Main Kanban -->
+  <section class="kanban">
+    <div class="columns">
+
+      <div class="column">
+        <div class="colHeader">On an Adventure</div>
+        <div class="colBody" data-status="doing" id="colDoing" data-filter-kid="{{acting_kid}}">
+          {% for inst in doing %}
+            {% include "partials/instance_card.html" %}
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="column">
+        <div class="colHeader">Ready for Check</div>
+        <div class="colBody" data-status="review" id="colReview" data-filter-kid="{{acting_kid}}">
+          {% for inst in review %}
+            {% include "partials/instance_card.html" %}
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="column doneColumn">
+        <div class="colHeader">Claim Reward 🎁</div>
+        <div class="colBody" data-status="done" id="colDone">
+          {% for inst in done %}
+            {% include "partials/instance_card.html" %}
+          {% endfor %}
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+
+{% endblock %}

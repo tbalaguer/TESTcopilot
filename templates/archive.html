@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="card">
+    <div class="row" style="align-items:center;">
+      <h2 style="margin:0;">Treasure Chest</h2>
+      <div class="spacer"></div>
+
+      {# Game Master button is already in base.html topbar; do not render it here to avoid duplicates #}
+
+      <a class="btn" href="{{ url_for('board') }}">Back to board</a>
+    </div>
+
+    <div class="filter" style="margin-top:10px;">
+      <span class="muted">Kid:</span>
+      <a class="pill {% if not kid %}active{% endif %}" href="{{ url_for('archive') }}">All</a>
+      {% for k in kids %}
+        <a class="pill {% if kid == k.id %}active{% endif %}" href="{{ url_for('archive', kid=k.id) }}">{{k.name}}</a>
+      {% endfor %}
+    </div>
+
+    <div style="margin-top:14px;" class="stack">
+      {% for inst in items %}
+        <div class="card" style="background: rgba(17,31,56,.55)">
+          <div class="row" style="align-items:center;">
+            <strong>{{inst.template.title}}</strong>
+            <div class="spacer"></div>
+            <span class="pill small">{{inst.points_awarded}} pts</span>
+
+            {% if gm_unlocked %}
+              <form method="post" action="{{ url_for('delete_instance', instance_id=inst.id) }}"
+                    onsubmit="return confirm('Delete this archived ticket? This will also remove linked points ledger entries.');"
+                    style="margin-left:8px;">
+                <input type="hidden" name="redirect" value="archive" />
+                <button class="btn danger" type="submit">Delete</button>
+              </form>
+            {% endif %}
+          </div>
+
+          <div class="muted">
+            <span class="dot" style="background: {{inst.assigned_kid.color}}"></span>
+            {{inst.assigned_kid.name}} — {{ inst.approved_at | format_approved }}
+          </div>
+          {% if inst.details %}<div class="muted" style="margin-top:6px;">Details: {{inst.details}}</div>{% endif %}
+        </div>
+      {% endfor %}
+
+      {% if items|length == 0 %}
+        <div class="muted">No completed tasks yet.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

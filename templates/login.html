@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="card" style="max-width:420px;margin:40px auto;">
+    <h2>Kanban Login</h2>
+    {% if error %}
+      <div class="alert">{{ error }}</div>
+    {% endif %}
+    <form method="post" action="{{ url_for('login') }}" class="stack">
+      <label>Username</label>
+      <input name="username" />
+      <label>Password</label>
+      <input name="password" type="password" />
+      <button class="btn primary" type="submit">Login</button>
+    </form>
+    <p class="muted"> Login as Game Master. </p>
+  </div>
+{% endblock %}
