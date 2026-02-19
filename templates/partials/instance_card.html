@@ -10,6 +10,8 @@
     {{inst.assigned_kid.name}}
   </div>
 
+  <div class="muted" style="margin-top:2px; font-size:0.85em;">Added: {{ inst.created_at | format_date }}</div>
+
   {% if inst.status.value != "done" %}
     <label class="muted" style="display:block;margin-top:8px;">Details (editable)</label>
     <textarea
@@ -63,6 +65,30 @@
         <input type="hidden" name="pool" value="{{ '1' if pool_visible else '0' }}">
         <button class="btn danger" type="submit">Delete</button>
       </form>
+      <button class="btn" type="button" onclick="toggleCardEdit({{inst.id}})">Edit</button>
+    </div>
+
+    <div id="cardEdit_{{inst.id}}" style="display:none; margin-top:10px;" class="stack">
+      <div>
+        <label class="muted">Title</label>
+        <input id="editTitle_{{inst.id}}" type="text" value="{{inst.template.title}}" />
+      </div>
+      <div>
+        <label class="muted">Points</label>
+        <input id="editPoints_{{inst.id}}" type="number" min="0" value="{{inst.points_awarded}}" />
+      </div>
+      <div>
+        <label class="muted">Player</label>
+        <select id="editKid_{{inst.id}}">
+          {% for k in kids %}
+            <option value="{{k.id}}" {% if k.id == inst.assigned_kid_id %}selected{% endif %}>{{k.name}}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="row">
+        <button class="btn primary" type="button" onclick="saveCardEdit({{inst.id}})">Save</button>
+        <button class="btn" type="button" onclick="toggleCardEdit({{inst.id}})">Cancel</button>
+      </div>
     </div>
   {% endif %}
 </div>

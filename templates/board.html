@@ -8,7 +8,9 @@
       <h2 style="margin:0;">Players</h2>
       <div class="spacer"></div>
 
+      {% if gm_unlocked %}
       <a class="btn" href="{{ url_for('archive') }}">Treasure Chest</a>
+      {% endif %}
     </div>
 
     <div class="row" style="margin-top:10px; align-items:flex-start;">
@@ -31,7 +33,7 @@
 
       <!-- Right side: Wallet button for the currently active player -->
       <div class="filter" style="margin-left:auto; text-align:right;">
-        <strong>Wallet:</strong>
+        <strong>Treasure Chest:</strong>
         <div class="row" style="justify-content:flex-end;">
           <form method="get" action="{{ url_for('ledger', kid_id=acting_kid) }}">
             <button class="btn" type="submit">

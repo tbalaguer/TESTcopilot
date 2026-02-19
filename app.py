@@ -69,6 +69,22 @@ def format_approved(dt):
 
 
 # ADDED: Template filter for formatting dates in Pacific Time
+@app.template_filter('datetime_local')
+def datetime_local(dt):
+    """Format datetime as 'YYYY-MM-DDTHH:MM' in Pacific Time for datetime-local inputs"""
+    if dt is None:
+        return ""
+    if isinstance(dt, str):
+        try:
+            dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+    dt = dt.astimezone(PACIFIC_TZ)
+    return dt.strftime('%Y-%m-%dT%H:%M')
+
+
 @app.template_filter('format_date')
 def format_date(dt):
     """Format datetime as 'MM-DD-YYYY at h:mm AM/PM' in Pacific Time"""
@@ -597,6 +613,71 @@ def collect_route(instance_id: int):
         db.commit()
 
         return redirect_to_board_preserving_acting_kid(fallback_kid=inst_kid)
+    finally:
+        db.close()
+
+
+@app.post("/instances/<int:instance_id>/edit")
+@login_required
+def edit_instance(instance_id: int):
+    g = gm_guard_or_redirect()
+    if g:
+        return g
+
+    db = get_db()
+    try:
+        inst = db.get(TaskInstance, instance_id)
+        if not inst:
+            return jsonify({"error": "Task not found"}), 404
+
+        title = request.form.get("title", "").strip()
+        if title:
+            inst.template.title = title
+
+        points_str = request.form.get("points_awarded", "").strip()
+        if points_str:
+            try:
+                inst.points_awarded = int(points_str)
+            except ValueError:
+                return jsonify({"error": "Invalid points value"}), 400
+
+        assigned_kid_str = request.form.get("assigned_kid_id", "").strip()
+        if assigned_kid_str:
+            try:
+                kid_id = int(assigned_kid_str)
+            except ValueError:
+                return jsonify({"error": "Invalid player ID"}), 400
+            if not db.get(Kid, kid_id):
+                return jsonify({"error": "Player not found"}), 404
+            inst.assigned_kid_id = kid_id
+
+        details = request.form.get("details", None)
+        if details is not None:
+            inst.details = details
+
+        created_at_str = request.form.get("created_at", "").strip()
+        if created_at_str:
+            try:
+                pt_dt = datetime.fromisoformat(created_at_str)
+                pt_dt = pt_dt.replace(tzinfo=PACIFIC_TZ)
+                inst.created_at = pt_dt.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+            except ValueError:
+                pass
+
+        approved_at_str = request.form.get("approved_at", "").strip()
+        if approved_at_str:
+            try:
+                pt_dt = datetime.fromisoformat(approved_at_str)
+                pt_dt = pt_dt.replace(tzinfo=PACIFIC_TZ)
+                inst.approved_at = pt_dt.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+            except ValueError:
+                pass
+
+        db.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 400
     finally:
         db.close()
 

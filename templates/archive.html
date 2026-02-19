@@ -2,7 +2,7 @@
 {% block content %}
   <div class="card">
     <div class="row" style="align-items:center;">
-      <h2 style="margin:0;">Treasure Chest</h2>
+      <h2 style="margin:0;">{% if gm_unlocked %}Journal Entries{% else %}Treasure Chest{% endif %}</h2>
       <div class="spacer"></div>
 
       {# Game Master button is already in base.html topbar; do not render it here to avoid duplicates #}
@@ -89,6 +89,9 @@
               <span class="pill small">{{entry.data.points_awarded}} pts</span>
 
               {% if gm_unlocked %}
+                <button class="btn primary" type="button"
+                        onclick="toggleArchiveEdit({{entry.data.id}})"
+                        style="margin-left:8px;">Edit</button>
                 <form method="post" action="{{ url_for('delete_instance', instance_id=entry.data.id) }}"
                       onsubmit="return confirm('Delete this archived ticket? This will also remove linked points ledger entries.');"
                       style="margin-left:8px;">
@@ -102,7 +105,45 @@
               <span class="dot" style="background: {{entry.data.assigned_kid.color}}"></span>
               {{entry.data.assigned_kid.name}} — {{ entry.data.approved_at | format_approved }}
             </div>
+            <div class="muted" style="margin-top:2px; font-size:0.85em;">Added: {{ entry.data.created_at | format_date }}</div>
             {% if entry.data.details %}<div class="muted" style="margin-top:6px;">Details: {{entry.data.details}}</div>{% endif %}
+
+            {% if gm_unlocked %}
+            <div id="archiveEdit_{{entry.data.id}}" style="display:none; margin-top:10px;" class="stack">
+              <div>
+                <label class="muted">Title</label>
+                <input id="aEditTitle_{{entry.data.id}}" type="text" value="{{entry.data.template.title}}" />
+              </div>
+              <div>
+                <label class="muted">Points</label>
+                <input id="aEditPoints_{{entry.data.id}}" type="number" min="0" value="{{entry.data.points_awarded}}" />
+              </div>
+              <div>
+                <label class="muted">Assigned Player</label>
+                <select id="aEditKid_{{entry.data.id}}">
+                  {% for k in kids %}
+                    <option value="{{k.id}}" {% if k.id == entry.data.assigned_kid_id %}selected{% endif %}>{{k.name}}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="muted">Details</label>
+                <textarea id="aEditDetails_{{entry.data.id}}">{{entry.data.details}}</textarea>
+              </div>
+              <div>
+                <label class="muted">Added At (Pacific Time)</label>
+                <input id="aEditCreatedAt_{{entry.data.id}}" type="datetime-local" value="{{entry.data.created_at | datetime_local}}" />
+              </div>
+              <div>
+                <label class="muted">Approved At (Pacific Time)</label>
+                <input id="aEditApprovedAt_{{entry.data.id}}" type="datetime-local" value="{{entry.data.approved_at | datetime_local}}" />
+              </div>
+              <div class="row">
+                <button class="btn primary" type="button" onclick="saveArchiveEdit({{entry.data.id}})">Save</button>
+                <button class="btn" type="button" onclick="toggleArchiveEdit({{entry.data.id}})">Cancel</button>
+              </div>
+            </div>
+            {% endif %}
           </div>
         {% endif %}
       {% endfor %}
@@ -112,4 +153,41 @@
       {% endif %}
     </div>
   </div>
+
+  <script>
+    function toggleArchiveEdit(instanceId) {
+      const editDiv = document.getElementById('archiveEdit_' + instanceId);
+      if (!editDiv) return;
+      editDiv.style.display = editDiv.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function saveArchiveEdit(instanceId) {
+      const title = document.getElementById('aEditTitle_' + instanceId)?.value?.trim();
+      const points = document.getElementById('aEditPoints_' + instanceId)?.value;
+      const kidId = document.getElementById('aEditKid_' + instanceId)?.value;
+      const details = document.getElementById('aEditDetails_' + instanceId)?.value;
+      const createdAt = document.getElementById('aEditCreatedAt_' + instanceId)?.value;
+      const approvedAt = document.getElementById('aEditApprovedAt_' + instanceId)?.value;
+
+      const form = new FormData();
+      if (title) form.append('title', title);
+      if (points !== undefined && points !== '') form.append('points_awarded', points);
+      if (kidId) form.append('assigned_kid_id', kidId);
+      if (details !== undefined) form.append('details', details);
+      if (createdAt) form.append('created_at', createdAt);
+      if (approvedAt) form.append('approved_at', approvedAt);
+
+      try {
+        const res = await fetch('/instances/' + instanceId + '/edit', { method: 'POST', body: form });
+        const data = await res.json().catch(() => ({ error: 'Save failed' }));
+        if (!res.ok) {
+          alert(data.error || 'Save failed');
+          return;
+        }
+        window.location.reload();
+      } catch (e) {
+        alert(e.message || 'Save failed');
+      }
+    }
+  </script>
 {% endblock %}
