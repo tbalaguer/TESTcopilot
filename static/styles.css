@@ -30,12 +30,12 @@ body{
 
 .brand{font-weight:900; letter-spacing:.3px}
 .brandLink{color:var(--text); text-decoration:none;}
-.container{padding:16px; max-width: 1680px; margin: 0 auto;}
+.container{padding:16px; margin: 0 auto;}
 .row{display:flex; gap:10px}
 .spacer{flex:1}
 
 .card{
-  background: rgba(17,31,56,.85);
+  background: rgba(17,31,56,1);
   border:1px solid var(--border);
   border-radius:14px;
   padding:14px;
@@ -103,23 +103,38 @@ textarea{min-height:70px; resize: vertical;}
 
 .board{
   display:flex;
-  gap:14px;
+  gap:0px;
   margin-top:14px;
-  min-height: 70vh;
+  padding: 0px;
+  margin-left: -16px;
+  padding-right: -16px;
+  align-items: stretch;
 }
 
-/* Pool expanded */
 .pool{
+  flex-shrink: 0;
+  min-width: 0px;
+  max-width: 360px;
   width: 360px;
   transition: width 0.3s ease, opacity 0.3s ease;
   overflow: hidden;
+  /*border:1px solid var(--border);
+  border-radius:14px;
+  background: rgba(15,26,46,.35);*/
+  display: flex;
+  flex-direction: column;
+  margin-left: 16px;
+  margin-right: 37px;
+  /*padding: 14px;*/
 }
 
 /* Pool mini column (collapsed) */
 .poolMini{
-  width: 78px;
+  flex-shrink: 0;
   border:1px solid var(--border);
   border-radius:14px;
+  margin-right: 7px;
+  margin-left: -37px;
   background: rgba(15,26,46,.35);
   overflow:hidden;
   display: flex;
@@ -132,15 +147,23 @@ textarea{min-height:70px; resize: vertical;}
   justify-content:center;
   flex: 1;
 }
+
 .poolMiniButton{
   width: 100%;
   height: 100%;
   border:0;
   background: transparent;
   color: var(--text);
-  font-size: 28px;
+  font-size: 14px;
+  font-weight: 700;
   cursor: pointer;
-  padding: 20px 0;
+  padding: 36px 0px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  letter-spacing: 1px;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
 }
 .poolMiniButton:hover{
   background: rgba(96,165,250,.08);
@@ -151,9 +174,17 @@ textarea{min-height:70px; resize: vertical;}
   align-items:center;
   justify-content: space-between;
   gap:8px;
+  flex-shrink: 0;
 }
 
-.list{display:flex; flex-direction:column; gap:10px; margin-top:10px;}
+.list{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  margin-top:10px;
+  flex: 1;
+  overflow-y: auto;
+}
 .ticket{
   border:1px dashed rgba(167,180,211,.35);
   border-radius: 14px;
@@ -167,23 +198,75 @@ textarea{min-height:70px; resize: vertical;}
 .poolTemplate{ cursor: grab; }
 .poolTemplate:active{ cursor: grabbing; }
 
-.kanban{flex:1}
-.columns{display:grid; grid-template-columns: repeat(3, 1fr); gap:14px;}
-.column{background: rgba(15,26,46,.35); border:1px solid var(--border); border-radius:14px; overflow:hidden;}
-.colHeader{padding:12px 12px; font-weight:900; border-bottom:1px solid var(--border);}
-.colBody{padding:12px; min-height: 420px; display:flex; flex-direction:column; gap:10px;}
+.kanban{
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.columns{
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap:7px;
+  flex: 1;
+}
+.column{
+  background: rgba(15,26,46,.35);
+  border:1px solid var(--border);
+  border-radius:14px;
+  overflow:hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+}
+.colHeader{
+  padding:12px 12px;
+  font-weight:900;
+  border-bottom:1px solid var(--border);
+  flex-shrink: 0;
+}
+.colBody{
+  padding:12px;
+  min-height: 300px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  flex: 1;
+  overflow-y: auto;
+}
 
-/* Claim Reward column distinct styling */
+/* Claim Reward column distinct styling - greyish tone to indicate non-accessible */
 .doneColumn{
-  background: rgba(15,26,46,.2);
-  border-left: 3px solid rgba(96,165,250,.5);
+  background: rgba(38, 55, 89, .1);
+  border: 1px solid rgba(38, 55, 89, 0.1);
 }
 .doneColumn .colHeader{
-  background: rgba(15,26,46,.3);
-  opacity: 0.85;
+  background: rgba(38, 55, 89, 0.5);
+  border-bottom: 1px solid rgba(38, 55, 89, 0.1);
 }
 .doneColumn .colBody{
-  opacity: 0.90;
+  /* CHANGED: Use pseudo-element for background pattern so opacity doesn't affect cards */
+  position: relative;
+}
+.doneColumn .colBody::before{
+  /* ADDED: Create a pseudo-element for the background pattern */
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgb(38, 55, 89);
+  background-image: repeating-linear-gradient(-45deg, transparent, transparent 30px, black 10px, black 35px);
+  opacity: 0.20;
+  /* ADDED: Ensure pattern stays behind cards */
+  z-index: 0;
+  pointer-events: none;
+}
+.doneColumn .colBody > *{
+  /* ADDED: Ensure all child elements (cards) are above the background */
+  position: relative;
+  z-index: 1;
 }
 
 .ticketCard{cursor: grab;}
@@ -219,3 +302,40 @@ textarea{min-height:70px; resize: vertical;}
 .thead,.trow{display:grid; grid-template-columns: 280px 120px 180px 1fr; gap:10px; padding:10px; border-bottom:1px solid rgba(36,52,84,.6);}
 .thead{font-weight:900;}
 .trow{background: rgba(17,31,56,.35); border-radius:12px; margin-top:8px; border:1px solid rgba(36,52,84,.6);}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 1400px) {
+  .pool{
+    width: 300px;
+    max-width: 300px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .pool{
+    width: 260px;
+    max-width: 260px;
+  }
+  .column{
+    min-width: 180px;
+  }
+}
+
+@media (max-width: 900px) {
+  .board{
+    flex-direction: column;
+    margin-left: 0;
+    padding-right: 0;
+    /* ADDED: Remove max-height on mobile for better usability */
+    max-height: none;
+  }
+  .pool, .poolMini{
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .columns{
+    grid-template-columns: 1fr;
+  }
+}

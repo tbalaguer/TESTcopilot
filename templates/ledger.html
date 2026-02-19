@@ -2,68 +2,177 @@
 {% block content %}
   <div class="card">
     <div class="row" style="align-items:center;">
-      <h2 style="margin:0;">{{ kid.name }} — Wallet</h2>
+      <h2 style="margin:0;">{{kid.name}}'s Wallet</h2>
       <div class="spacer"></div>
-      <a class="btn" href="{{ url_for('board', filter_kid=kid.id) }}">View on board</a>
-      <a class="btn" href="{{ url_for('board') }}">Back</a>
+
+      <!-- Wallet Switcher Dropdown (no label) -->
+      <div style="margin-right:10px;">
+        <select onchange="window.location.href=this.value" style="padding:8px 12px; background: rgba(17,31,56,.8); border: 1px solid rgba(255,255,255,0.2); border-radius:6px; color: white; cursor:pointer;">
+          {% for k in kids %}
+            <option value="{{ url_for('ledger', kid_id=k.id) }}" {% if k.id == kid.id %}selected{% endif %}>
+              {{k.name}}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <a class="btn" href="{{ url_for('board') }}">Back to board</a>
     </div>
 
-    <div class="row" style="margin-top:10px;flex-wrap:wrap;">
-      <div class="card" style="flex:1;min-width:240px;">
-        <div class="muted">Balance</div>
-        <div style="font-size:28px;font-weight:900;">{{ balance }} pts</div>
-        <div class="muted">Months covered (approx): {{ "%.2f"|format(months_covered) }}</div>
+    <div style="margin-top:14px;">
+      <!-- Balance Card - Full Width -->
+      <div class="card" style="background: rgba(17,31,56,.65); margin-bottom:14px;">
+        <div style="font-size:2rem; font-weight:900;">{{balance}} pts</div>
+        <div class="muted">Current balance</div>
       </div>
 
-      <div class="card" style="flex:1;min-width:240px;">
-        <div class="row" style="align-items:center;">
-          <strong>Rent Policy</strong>
-          <div class="spacer"></div>
-          <form method="post" action="{{ url_for('charge_rent') }}">
-            <button class="btn" type="submit">Charge rent now</button>
-          </form>
-        </div>
+      {% if gm_unlocked %}
+        <!-- Two Column Layout for GM Controls -->
+        <div class="row" style="align-items:flex-start; gap:14px; margin-bottom:14px;">
+          <!-- Left Column: Rent Policy -->
+          <div class="card" style="background: rgba(17,31,56,.65); flex:1;">
+            <h3 style="margin:0 0 10px 0;">Rent Policy</h3>
+            <form method="post" action="{{ url_for('update_rent', kid_id=kid.id) }}" class="stack">
+              <div>
+                <label class="muted">Rent Amount (pts/month)</label>
+                <input type="number" name="rent_amount" value="{{rent_policy.rent_amount}}" min="0" />
+              </div>
+              <div>
+                <label class="muted">Due Day of Month</label>
+                <input type="number" name="rent_day_of_month" value="{{rent_policy.rent_day_of_month}}" min="1" max="28" />
+              </div>
+              <button class="btn primary" type="submit">Update Rent Policy</button>
+            </form>
 
-        <form method="post" action="{{ url_for('update_rent', kid_id=kid.id) }}" class="stack" style="margin-top:10px;">
-          <label class="muted">Rent amount (points)</label>
-          <input type="number" name="rent_amount" min="0" value="{{rent_policy.rent_amount}}" />
-          <label class="muted">Rent day of month (1-28)</label>
-          <input type="number" name="rent_day_of_month" min="1" max="28" value="{{rent_policy.rent_day_of_month}}" />
-          <button class="btn primary" type="submit">Save rent settings</button>
-          <div class="muted">Last charged: {{ rent_policy.last_charged_on or "never" }}</div>
-        </form>
-      </div>
-
-      <div class="card" style="flex:1;min-width:240px;">
-        <strong>Manual adjustment</strong>
-        <form method="post" action="{{ url_for('adjust', kid_id=kid.id) }}" class="stack" style="margin-top:10px;">
-          <label class="muted">Amount (can be negative)</label>
-          <input type="number" name="amount" value="0" />
-          <label class="muted">Note</label>
-          <input name="note" placeholder="e.g., Bonus for great attitude" />
-          <button class="btn" type="submit">Post adjustment</button>
-        </form>
-      </div>
-    </div>
-
-    <h3 style="margin-top:18px;">Journal</h3>
-    <div class="table">
-      <div class="thead">
-        <div>Date</div><div>Amount</div><div>Reason</div><div>Note</div>
-      </div>
-      {% for e in entries %}
-        <div class="trow">
-          <div class="muted">{{ e.created_at | format_approved }}</div>
-          <div style="font-weight:900; color: {% if e.amount>=0 %}#86efac{% else %}#fca5a5{% endif %};">
-            {{ e.amount }}
+            {% if rent_policy.rent_amount > 0 %}
+              <div class="muted" style="margin-top:10px;">
+                Current balance covers approximately {{months_covered}} month(s) of rent.
+              </div>
+              <!-- FIXED: Form with onsubmit to prevent default navigation -->
+              <form id="chargeRentForm" method="post" action="{{ url_for('charge_rent') }}" style="margin-top:10px;" onsubmit="return confirmChargeRent(event);">
+                <input type="hidden" name="kid_id" value="{{kid.id}}" />
+                <button class="btn" type="submit">Charge rent now</button>
+              </form>
+            {% endif %}
           </div>
-          <div class="muted">{{ e.reason.value }}</div>
-          <div class="muted">{{ e.note }}</div>
+
+          <!-- Right Column: Manual Adjustment -->
+          <div class="card" style="background: rgba(17,31,56,.65); flex:1;">
+            <h3 style="margin:0 0 10px 0;">Manual Adjustment</h3>
+            <form method="post" action="{{ url_for('adjust', kid_id=kid.id) }}" class="stack">
+              <div>
+                <label class="muted">Amount (+ or -)</label>
+                <input type="number" name="amount" placeholder="e.g., 50 or -20" required />
+              </div>
+              <div>
+                <label class="muted">Note (optional)</label>
+                <input type="text" name="note" placeholder="e.g., Birthday bonus" />
+              </div>
+              <button class="btn primary" type="submit">Add Adjustment</button>
+            </form>
+          </div>
         </div>
-      {% endfor %}
-      {% if entries|length == 0 %}
-        <div class="muted" style="margin-top:10px;">No ledger entries yet.</div>
       {% endif %}
+
+      <!-- Journal Section - Table Format -->
+      <div class="card" style="background: rgba(17,31,56,.65);">
+        <h3 style="margin:0 0 14px 0;">Journal</h3>
+
+        {% if entries|length > 0 %}
+          <table style="width:100%; border-collapse: collapse;">
+            <thead>
+              <tr style="border-bottom: 2px solid rgba(255,255,255,0.2);">
+                <th style="text-align:left; padding:10px; font-weight:600; color: rgba(255,255,255,0.7);">Date</th>
+                <th style="text-align:left; padding:10px; font-weight:600; color: rgba(255,255,255,0.7);">Reason</th>
+                <th style="text-align:left; padding:10px; font-weight:600; color: rgba(255,255,255,0.7);">Note</th>
+                <th style="text-align:right; padding:10px; font-weight:600; color: rgba(255,255,255,0.7);">Amount</th>
+                {% if gm_unlocked %}
+                  <th style="text-align:right; padding:10px; font-weight:600; color: rgba(255,255,255,0.7);">Actions</th>
+                {% endif %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for entry in entries %}
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                  <!-- Date Column -->
+                  <td style="padding:10px; vertical-align:top;">
+                    <div style="font-size:0.9rem;">{{ entry.created_at | format_date }}</div>
+                  </td>
+
+                  <!-- Reason Column -->
+                  <td style="padding:10px; vertical-align:top;">
+                    <div style="font-weight:600;">
+                      {% if entry.reason.value == 'task_approved' %}
+                        Task Approved
+                      {% elif entry.reason.value == 'task_collected' %}
+                        Task Collected
+                      {% elif entry.reason.value == 'manual_adjustment' %}
+                        Manual Adjustment
+                      {% elif entry.reason.value == 'rent_paid' %}
+                        Rent Paid
+                      {% else %}
+                        {{entry.reason.value}}
+                      {% endif %}
+                    </div>
+                  </td>
+
+                  <!-- Note Column -->
+                  <td style="padding:10px; vertical-align:top;">
+                    {% if entry.note %}
+                      <div style="font-size:0.9rem; color: rgba(255,255,255,0.7);">{{entry.note}}</div>
+                    {% else %}
+                      <div style="font-size:0.9rem; color: rgba(255,255,255,0.3);">—</div>
+                    {% endif %}
+                  </td>
+
+                  <!-- Amount Column - BLUE for rent, GREEN for positive, RED for negative -->
+                  <td style="padding:10px; text-align:right; vertical-align:top;">
+                    <div style="font-size:1.1rem; font-weight:700;
+                      {% if entry.reason.value == 'rent_paid' %}color: #60a5fa;
+                      {% elif entry.amount > 0 %}color: #22c55e;
+                      {% else %}color: #ef4444;{% endif %}">
+                      {% if entry.amount > 0 %}+{% endif %}{{entry.amount}} pts
+                    </div>
+                  </td>
+
+                  <!-- Actions Column (Delete Button) - Only visible when GM unlocked -->
+                  {% if gm_unlocked %}
+                    <td style="padding:10px; text-align:right; vertical-align:top;">
+                      {% if entry.reason.value == 'manual_adjustment' or entry.reason.value == 'rent_paid' %}
+                        <form method="post" action="{{ url_for('delete_ledger_entry', ledger_id=entry.id) }}"
+                              onsubmit="return confirm('Delete this {% if entry.reason.value == 'rent_paid' %}rent charge{% else %}manual adjustment{% endif %}? This will permanently remove it from the ledger.');"
+                              style="margin:0;">
+                          <button class="btn danger" type="submit" style="padding:4px 8px; font-size:0.85rem;">Delete</button>
+                        </form>
+                      {% elif entry.instance_id %}
+                        <form method="post" action="{{ url_for('delete_instance', instance_id=entry.instance_id) }}"
+                              onsubmit="return confirm('Delete this task entry? This will remove the task and all related ledger entries.');"
+                              style="margin:0;">
+                          <button class="btn danger" type="submit" style="padding:4px 8px; font-size:0.85rem;">Delete</button>
+                        </form>
+                      {% else %}
+                        <span style="color: rgba(255,255,255,0.3); font-size:0.85rem;">—</span>
+                      {% endif %}
+                    </td>
+                  {% endif %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <div class="muted">No transactions yet.</div>
+        {% endif %}
+      </div>
     </div>
   </div>
+
+  <script>
+    function confirmChargeRent(event) {
+      if (!confirm('Charge rent of {{rent_policy.rent_amount}} pts now?')) {
+        event.preventDefault();
+        return false;
+      }
+      return true;
+    }
+  </script>
 {% endblock %}

@@ -18,34 +18,97 @@
       {% endfor %}
     </div>
 
-    <div style="margin-top:14px;" class="stack">
-      {% for inst in items %}
-        <div class="card" style="background: rgba(17,31,56,.55)">
-          <div class="row" style="align-items:center;">
-            <strong>{{inst.template.title}}</strong>
-            <div class="spacer"></div>
-            <span class="pill small">{{inst.points_awarded}} pts</span>
+    <!-- Single title above all entries -->
+    {% if items|length > 0 or manual_adjustments|length > 0 %}
+      <h3 style="margin-top:20px; margin-bottom:10px;">Completed Tasks</h3>
+    {% endif %}
 
-            {% if gm_unlocked %}
-              <form method="post" action="{{ url_for('delete_instance', instance_id=inst.id) }}"
-                    onsubmit="return confirm('Delete this archived ticket? This will also remove linked points ledger entries.');"
-                    style="margin-left:8px;">
-                <input type="hidden" name="redirect" value="archive" />
-                <button class="btn danger" type="submit">Delete</button>
-              </form>
+    <div style="margin-top:14px;" class="stack">
+      <!-- Render all entries (sorted by backend) -->
+      {% for entry in all_entries %}
+        {% if entry.type == 'adjustment' %}
+          {# Manual adjustment card #}
+          <div class="card" style="background: rgba(17,31,56,.55); border-left: 3px solid rgba(250,204,21,.6);">
+            <div class="row" style="align-items:center;">
+              <strong>Manual Adjustment</strong>
+              <div class="spacer"></div>
+              <span class="pill small" style="{% if entry.data.amount > 0 %}color: #22c55e;{% else %}color: #ef4444;{% endif %}">
+                {% if entry.data.amount > 0 %}+{% endif %}{{entry.data.amount}} pts
+              </span>
+
+              {% if gm_unlocked %}
+                <form method="post" action="{{ url_for('delete_ledger_entry', ledger_id=entry.data.id) }}"
+                      onsubmit="return confirm('Delete this manual adjustment? This will permanently remove it from the ledger.');"
+                      style="margin-left:8px;">
+                  <button class="btn danger" type="submit">Delete</button>
+                </form>
+              {% endif %}
+            </div>
+
+            <div class="muted">
+              <span class="dot" style="background: {{entry.data.kid.color}}"></span>
+              {{entry.data.kid.name}} — {{ entry.data.created_at | format_date }}
+            </div>
+            {% if entry.data.note %}
+              <div class="muted" style="margin-top:6px;">Note: {{entry.data.note}}</div>
             {% endif %}
           </div>
+        {% elif entry.type == 'rent' %}
+          {# Rent charged card #}
+          <div class="card" style="background: rgba(17,31,56,.55); border-left: 3px solid rgba(96,165,250,.6);">
+            <div class="row" style="align-items:center;">
+              <strong>Rent Charged</strong>
+              <div class="spacer"></div>
+              <span class="pill small" style="color: #60a5fa;">
+                {{entry.data.amount}} pts
+              </span>
 
-          <div class="muted">
-            <span class="dot" style="background: {{inst.assigned_kid.color}}"></span>
-            {{inst.assigned_kid.name}} — {{ inst.approved_at | format_approved }}
+              {% if gm_unlocked %}
+                <form method="post" action="{{ url_for('delete_ledger_entry', ledger_id=entry.data.id) }}"
+                      onsubmit="return confirm('Delete this rent charge? This will permanently remove it from the ledger.');"
+                      style="margin-left:8px;">
+                  <button class="btn danger" type="submit">Delete</button>
+                </form>
+              {% endif %}
+            </div>
+
+            <div class="muted">
+              <span class="dot" style="background: {{entry.data.kid.color}}"></span>
+              {{entry.data.kid.name}} — {{ entry.data.created_at | format_date }}
+            </div>
+            {% if entry.data.note %}
+              <div class="muted" style="margin-top:6px;">Note: {{entry.data.note}}</div>
+            {% endif %}
           </div>
-          {% if inst.details %}<div class="muted" style="margin-top:6px;">Details: {{inst.details}}</div>{% endif %}
-        </div>
+        {% else %}
+          {# Task instance card #}
+          <div class="card" style="background: rgba(17,31,56,.55)">
+            <div class="row" style="align-items:center;">
+              <strong>{{entry.data.template.title}}</strong>
+              <div class="spacer"></div>
+              <span class="pill small">{{entry.data.points_awarded}} pts</span>
+
+              {% if gm_unlocked %}
+                <form method="post" action="{{ url_for('delete_instance', instance_id=entry.data.id) }}"
+                      onsubmit="return confirm('Delete this archived ticket? This will also remove linked points ledger entries.');"
+                      style="margin-left:8px;">
+                  <input type="hidden" name="redirect" value="archive" />
+                  <button class="btn danger" type="submit">Delete</button>
+                </form>
+              {% endif %}
+            </div>
+
+            <div class="muted">
+              <span class="dot" style="background: {{entry.data.assigned_kid.color}}"></span>
+              {{entry.data.assigned_kid.name}} — {{ entry.data.approved_at | format_approved }}
+            </div>
+            {% if entry.data.details %}<div class="muted" style="margin-top:6px;">Details: {{entry.data.details}}</div>{% endif %}
+          </div>
+        {% endif %}
       {% endfor %}
 
-      {% if items|length == 0 %}
-        <div class="muted">No completed tasks yet.</div>
+      {% if items|length == 0 and manual_adjustments|length == 0 %}
+        <div class="muted">No completed tasks or manual adjustments yet.</div>
       {% endif %}
     </div>
   </div>

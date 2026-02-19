@@ -3,6 +3,7 @@ from sqlalchemy import select, desc
 from dotenv import load_dotenv
 from urllib.parse import urlparse
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from config import SECRET_KEY
 from db import get_db
@@ -25,13 +26,16 @@ app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.secret_key = SECRET_KEY
 
+# Pacific Time timezone constant
+PACIFIC_TZ = ZoneInfo("America/Los_Angeles")
+
 
 # -----------------------
 # Template filters
 # -----------------------
 @app.template_filter('format_approved')
 def format_approved(dt):
-    """Format approved_at datetime as 'Approved: MM-DD-YYYY at h:mm AM/PM'"""
+    """Format approved_at datetime as 'Approved: MM-DD-YYYY at h:mm AM/PM' in Pacific Time"""
     if dt is None:
         return ""
     if isinstance(dt, str):
@@ -40,6 +44,13 @@ def format_approved(dt):
             dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
         except (ValueError, AttributeError):
             return dt
+
+    # Convert to Pacific Time if datetime is timezone-aware or naive (assume UTC)
+    if dt.tzinfo is None:
+        # Treat naive datetime as UTC
+        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+    dt = dt.astimezone(PACIFIC_TZ)
+
     # Use %-I for Unix/Linux (no leading zero), fallback to %I for Windows
     try:
         formatted = dt.strftime('%m-%d-%Y at %-I:%M %p')
@@ -55,6 +66,38 @@ def format_approved(dt):
             parts[1] = ':'.join(time_parts)
             formatted = ' at '.join(parts)
     return f"Approved: {formatted}"
+
+
+# ADDED: Template filter for formatting dates in Pacific Time
+@app.template_filter('format_date')
+def format_date(dt):
+    """Format datetime as 'MM-DD-YYYY at h:mm AM/PM' in Pacific Time"""
+    if dt is None:
+        return "N/A"
+    if isinstance(dt, str):
+        try:
+            dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            return dt
+
+    # Convert to Pacific Time if datetime is timezone-aware or naive (assume UTC)
+    if dt.tzinfo is None:
+        # Treat naive datetime as UTC
+        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+    dt = dt.astimezone(PACIFIC_TZ)
+
+    try:
+        formatted = dt.strftime('%m-%d-%Y at %-I:%M %p')
+    except ValueError:
+        formatted = dt.strftime('%m-%d-%Y at %I:%M %p')
+        parts = formatted.split(' at ')
+        if len(parts) == 2:
+            time_parts = parts[1].split(':')
+            if time_parts[0].startswith('0'):
+                time_parts[0] = time_parts[0][1:]
+            parts[1] = ':'.join(time_parts)
+            formatted = ' at '.join(parts)
+    return formatted
 
 
 # -----------------------
@@ -111,6 +154,17 @@ def get_acting_kid_from_request() -> int | None:
         return None
 
 
+def get_pool_visible_from_request() -> bool:
+    """
+    Get pool visibility state from form data or URL parameter.
+    Returns True if pool should be visible, False if collapsed.
+    Defaults to False (collapsed).
+    """
+    # CHANGED: Check both form data (POST) and query params (GET)
+    pool_param = (request.form.get("pool") or request.args.get("pool") or "0").strip()
+    return pool_param == "1"
+
+
 def redirect_to_board_preserving_acting_kid(*, fallback_kid: int | None = None):
     """
     Deterministic redirect to board preserving the active player if possible.
@@ -122,9 +176,12 @@ def redirect_to_board_preserving_acting_kid(*, fallback_kid: int | None = None):
     4) /board (default to first kid on load)
     """
     acting_kid = get_acting_kid_from_request() or fallback_kid
+    # Also preserve pool visibility state
+    pool_visible = get_pool_visible_from_request()
+
     if acting_kid:
-        return redirect(url_for("board", acting_kid=acting_kid))
-    return redirect(url_for("board"))
+        return redirect(url_for("board", acting_kid=acting_kid, pool=1 if pool_visible else 0))
+    return redirect(url_for("board", pool=1 if pool_visible else 0))
 
 
 # ---------------
@@ -181,7 +238,7 @@ def gamemaster_unlock():
 
         password = request.form.get("password", "")
         if not verify_password(password, user.password_hash):
-            return jsonify({"error": "Incorrect password"}), 400
+            return jsonify({"error": "Incorrect password"}), 401
 
         session["gm_unlocked"] = True
         return jsonify({"ok": True})
@@ -241,6 +298,7 @@ def board():
             return redirect(url_for("login"))
 
         acting_kid = request.args.get("acting_kid", type=int)
+        pool_visible = get_pool_visible_from_request()
 
         kids = db.scalars(select(Kid).order_by(Kid.name)).all()
         balances = {k.id: kid_balance(db, k.id) for k in kids}
@@ -279,6 +337,7 @@ def board():
             balances=balances,
             acting_kid=acting_kid,
             pool=pool,
+            pool_visible=pool_visible,
             doing=doing,
             review=review,
             done=done
@@ -358,14 +417,25 @@ def instantiate_template(template_id: int):
         acting_raw = (request.form.get("acting_kid_id", "") or "").strip()
         target_status = request.form.get("target_status", "doing")
 
-        if target_status != "doing":
-            return jsonify({"error": "Templates can only be dropped into Doing."}), 400
+        # CHANGED: Templates cannot be placed directly into "done"
+        if target_status == "done":
+            return jsonify({"error": "Templates cannot be placed directly into Claim Reward."}), 400
+
+        # CHANGED: Players can now instantiate into "doing" or "review"
+        # GM can instantiate into any non-Done column
+        if not is_gamemaster_unlocked() and target_status not in ["doing", "review"]:
+            return jsonify({"error": "Templates can be dropped into 'On an Adventure' or 'Ready for Check'."}), 400
+
         if not acting_raw or acting_raw.lower() == "none":
             return jsonify({"error": "No active player selected."}), 400
 
         acting_kid_id = int(acting_raw)
 
         inst = create_instance_from_template(db, template_id, acting_kid_id)
+        # CHANGED: Set the target status
+        if target_status != "doing":
+            inst.status = InstanceStatus(target_status)
+
         db.commit()
         return jsonify({"ok": True, "instance_id": inst.id})
     except Exception as e:
@@ -432,6 +502,69 @@ def approve_route(instance_id: int):
         db.close()
 
 
+# ADDED: New endpoint for drag-to-done approval (GM only)
+@app.post("/instances/<int:instance_id>/approve-drag")
+@login_required
+def approve_drag_route(instance_id: int):
+    # ADDED: GM guard for drag approval
+    if not is_gamemaster_unlocked():
+        return jsonify({"error": "Only Game Master can drag to Claim Reward"}), 403
+
+    db = get_db()
+    try:
+        approve_instance(db, instance_id)
+        db.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 400
+    finally:
+        db.close()
+
+
+# MODIFIED: Endpoint for unapproving and moving when dragged out of Done (GM only)
+@app.post("/instances/<int:instance_id>/unapprove")
+@login_required
+def unapprove_route(instance_id: int):
+    # GM guard for unapprove
+    if not is_gamemaster_unlocked():
+        return jsonify({"error": "Only Game Master can move tasks out of Claim Reward"}), 403
+
+    db = get_db()
+    try:
+        inst = db.get(TaskInstance, instance_id)
+        if not inst:
+            return jsonify({"error": "Task not found"}), 404
+
+        # Get target status from request (optional - for moving to specific column)
+        target_status = request.form.get("status", "")
+
+        # Remove approval timestamp and revert archived status
+        inst.approved_at = None
+        inst.archived = False
+
+        # ADDED: Change status if provided
+        if target_status:
+            try:
+                inst.status = InstanceStatus(target_status)
+            except ValueError:
+                return jsonify({"error": f"Invalid status: {target_status}"}), 400
+
+        # Remove any points ledger entries for this instance (unapprove reverses the reward)
+        db.query(PointsLedger).filter(
+            PointsLedger.instance_id == instance_id,
+            PointsLedger.reason == LedgerReason.task_approved
+        ).delete()
+
+        db.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 400
+    finally:
+        db.close()
+
+
 @app.post("/instances/<int:instance_id>/reject")
 @login_required
 def reject_route(instance_id: int):
@@ -486,11 +619,14 @@ def delete_instance(instance_id: int):
         db.query(PointsLedger).filter(PointsLedger.instance_id == instance_id).delete()
         db.delete(inst)
         db.commit()
-        
-        # Check if we should redirect to board (from board) or archive (from archive)
+
+        # CHANGED: Check if we should redirect to board, archive, or ledger
         ref = request.referrer
         if ref and 'archive' in ref:
             return redirect_back("archive")
+        elif ref and '/kids/' in ref and '/ledger' in ref:
+            # Redirect back to the same ledger page
+            return redirect(url_for("ledger", kid_id=inst_kid))
         else:
             return redirect_to_board_preserving_acting_kid(fallback_kid=inst_kid)
     finally:
@@ -530,6 +666,7 @@ def archive():
         user = current_user(db)
         kid = request.args.get("kid", type=int)
 
+        # Get completed task instances
         q = select(TaskInstance).where(
             TaskInstance.status == InstanceStatus.done,
             TaskInstance.archived == True  # noqa: E712
@@ -538,6 +675,61 @@ def archive():
             q = q.where(TaskInstance.assigned_kid_id == kid)
 
         items = db.scalars(q.order_by(desc(TaskInstance.approved_at).nullslast(), desc(TaskInstance.id))).all()
+
+        # Get manual adjustments (ledger entries without instance_id)
+        ledger_q = select(PointsLedger).where(
+            PointsLedger.reason == LedgerReason.manual_adjustment
+        )
+        if kid:
+            ledger_q = ledger_q.where(PointsLedger.kid_id == kid)
+
+        manual_adjustments = db.scalars(ledger_q.order_by(desc(PointsLedger.created_at))).all()
+
+        # ADDED: Get rent charges - FIXED to use rent_paid
+        rent_q = select(PointsLedger).where(
+            PointsLedger.reason == LedgerReason.rent_paid
+        )
+        if kid:
+            rent_q = rent_q.where(PointsLedger.kid_id == kid)
+
+        rent_charges = db.scalars(rent_q.order_by(desc(PointsLedger.created_at))).all()
+
+        # ADDED: Combine and sort entries chronologically
+        all_entries = []
+
+        # Add task instances
+        for inst in items:
+            all_entries.append({
+                'type': 'task',
+                'date': inst.approved_at if inst.approved_at else datetime.min,
+                'data': inst
+            })
+
+        # Add manual adjustments
+        for adj in manual_adjustments:
+            # FIXED: Eager load the kid relationship
+            kid_obj = db.get(Kid, adj.kid_id)
+            all_entries.append({
+                'type': 'adjustment',
+                'date': adj.created_at if adj.created_at else datetime.min,
+                'data': adj,
+                'kid': kid_obj
+            })
+
+        # ADDED: Add rent charges
+        for rent in rent_charges:
+            # FIXED: Eager load the kid relationship
+            kid_obj = db.get(Kid, rent.kid_id)
+            all_entries.append({
+                'type': 'rent',
+                'date': rent.created_at if rent.created_at else datetime.min,
+                'data': rent,
+                'kid': kid_obj
+            })
+
+        # Sort by date descending (most recent first)
+        all_entries.sort(key=lambda x: x['date'], reverse=True)
+
         kids = db.scalars(select(Kid).order_by(Kid.name)).all()
 
         return render_template(
@@ -546,7 +738,9 @@ def archive():
             gm_unlocked=is_gamemaster_unlocked(),
             kids=kids,
             kid=kid,
-            items=items
+            items=items,
+            manual_adjustments=manual_adjustments,
+            all_entries=all_entries
         )
     finally:
         db.close()
@@ -570,11 +764,15 @@ def ledger(kid_id: int):
             select(PointsLedger).where(PointsLedger.kid_id == kid_id).order_by(desc(PointsLedger.created_at))
         ).all()
 
+        # ADDED: Get all kids for wallet switcher dropdown
+        kids = db.scalars(select(Kid).order_by(Kid.name)).all()
+
         return render_template(
             "ledger.html",
             user=user,
             gm_unlocked=is_gamemaster_unlocked(),
             kid=kid,
+            kids=kids,
             balance=balance,
             rent_policy=rp,
             months_covered=covered,
@@ -630,21 +828,97 @@ def adjust(kid_id: int):
         db.close()
 
 
-@app.post("/rent/charge")
+# MODIFIED: Allow deletion of manual adjustments AND rent charges - FIXED to use rent_paid
+@app.post("/ledger/<int:ledger_id>/delete")
 @login_required
-def charge_rent():
+def delete_ledger_entry(ledger_id: int):
     g = gm_guard_or_redirect()
     if g:
         return g
 
     db = get_db()
     try:
-        kids = db.scalars(select(Kid)).all()
-        charged = 0
-        for k in kids:
-            if charge_rent_if_due(db, k.id):
-                charged += 1
+        ledger_entry = db.get(PointsLedger, ledger_id)
+        if not ledger_entry:
+            return redirect_back("archive")
+
+        # FIXED: Allow deletion of manual adjustments and rent_paid
+        if ledger_entry.reason not in [LedgerReason.manual_adjustment, LedgerReason.rent_paid]:
+            return redirect_back("archive")
+
+        # Store kid_id before deleting
+        entry_kid_id = ledger_entry.kid_id
+
+        db.delete(ledger_entry)
         db.commit()
-        return jsonify({"ok": True, "charged_kids": charged})
+
+        # Check if we should redirect to archive or ledger
+        ref = request.referrer
+        if ref and 'archive' in ref:
+            return redirect_back("archive")
+        else:
+            return redirect(url_for("ledger", kid_id=entry_kid_id))
+    finally:
+        db.close()
+
+
+# FIXED: Charge rent in Pacific Time
+@app.post("/rent/charge")
+@login_required
+def charge_rent():
+    if not is_gamemaster_unlocked():
+        return redirect(url_for("board"))
+
+    db = get_db()
+    kid_id = None
+    try:
+        kid_id_str = request.form.get("kid_id", "").strip()
+
+        if not kid_id_str:
+            return redirect(url_for("board"))
+
+        try:
+            kid_id = int(kid_id_str)
+        except ValueError:
+            return redirect(url_for("board"))
+
+        # Get kid and rent policy
+        kid = db.get(Kid, kid_id)
+        if not kid:
+            return redirect(url_for("board"))
+
+        rp = ensure_rent_policy(db, kid_id)
+
+        # Only charge if rent amount is greater than 0
+        if rp.rent_amount > 0:
+            # Create ledger entry with Pacific Time timestamp
+            now = datetime.now(PACIFIC_TZ)
+
+            db.add(
+                PointsLedger(
+                    kid_id=kid_id,
+                    amount=-abs(rp.rent_amount),
+                    reason=LedgerReason.rent_paid,
+                    instance_id=None,
+                    note=f"Monthly rent (day {rp.rent_day_of_month})",
+                )
+            )
+
+            # Update last charged date
+            rp.last_charged_on = now.date()
+
+            # Commit the transaction
+            db.commit()
+
+        return redirect(url_for("ledger", kid_id=kid_id))
+
+    except Exception as e:
+        db.rollback()
+        import traceback
+        traceback.print_exc()
+        if kid_id:
+            return redirect(url_for("ledger", kid_id=kid_id))
+        else:
+            return redirect(url_for("board"))
     finally:
         db.close()

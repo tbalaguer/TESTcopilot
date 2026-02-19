@@ -17,7 +17,7 @@
         <div class="kidbar">
           {% for k in kids %}
             <a class="kidchip {% if acting_kid==k.id %}active{% else %}inactive{% endif %}"
-               href="{{ url_for('board', acting_kid=k.id) }}"
+               href="{{ url_for('board', acting_kid=k.id, pool=1 if pool_visible else 0) }}"
                style="border-color: {{k.color}}">
               <span class="dot" style="background: {{k.color}}"></span>
               {{k.name}}: <strong>{{ balances[k.id] }}</strong> pts
@@ -44,18 +44,22 @@
   </div>
 </div>
 
+<!-- Hidden data attribute for JavaScript to read acting_kid -->
+<div data-acting-kid="{{ acting_kid }}" style="display:none;"></div>
+
 <div class="board">
 
-  <!-- Quest Board: normal (expanded) -->
-  <aside class="pool" id="poolDrawer">
+  <!-- Quest Board: normal (expanded) - visibility controlled by server -->
+  <aside class="pool" id="poolDrawer" {% if not pool_visible %}style="visibility:hidden; width:0; opacity:0;"{% else %}style="visibility:visible; width:360px; opacity:1;"{% endif %}>
     <div class="poolHeader">
       <div>
         <h3 style="margin:0;">Quest Board</h3>
-        <div class="muted">{{ pool|length }} available (drag to On an Adventure)</div>
+        <div class="muted">{{ pool|length }} available </div>
       </div>
       <div class="row">
         <form method="post" action="{{ url_for('pool_refresh') }}">
           <input type="hidden" name="acting_kid" value="{{ acting_kid }}">
+          <input type="hidden" name="pool" value="{{ '1' if pool_visible else '0' }}">
           <button class="btn" type="submit">Refresh</button>
         </form>
         <button class="btn" type="button" onclick="togglePool()">Collapse</button>
@@ -64,17 +68,12 @@
 
     {% if gm_unlocked %}
       <form method="post" action="{{ url_for('create_template') }}" class="card stack" style="margin: 12px 0;">
-        <strong>Create predefined task</strong>
+        <strong>Create task</strong>
         <input name="title" placeholder="e.g., Clean something" required />
         <input name="default_points" type="number" min="1" value="5" />
         <textarea name="help_text" placeholder="Help text (optional)"></textarea>
         <button class="btn primary" type="submit">Add to pool</button>
       </form>
-    {% else %}
-      <div class="card" id="gmLockedCard" style="margin: 12px 0; background: rgba(17,31,56,.55);">
-        <strong>Game Master locked</strong>
-        <div class="muted" style="margin-top:6px;">Unlock to create or delete templates.</div>
-      </div>
     {% endif %}
 
     <div class="list" id="poolList" data-acting-kid="{{acting_kid}}">
@@ -101,10 +100,10 @@
     </div>
   </aside>
 
-  <!-- Quest Board: collapsed (mini column) -->
-  <aside class="poolMini" id="poolMini" style="visibility:hidden; width:0; opacity:0;">
+  <!-- Quest Board: collapsed (mini column) - visibility controlled by server -->
+  <aside class="poolMini" id="poolMini" {% if pool_visible %}style="visibility:hidden; width:0; opacity:0;"{% else %}style="visibility:visible; width:78px; opacity:1;"{% endif %}>
     <div class="poolMiniHeader" title="Show Quest Board">
-      <button class="poolMiniButton" type="button" onclick="togglePool()">⇥</button>
+      <button class="poolMiniButton" type="button" onclick="togglePool()">Quest Board</button>
     </div>
   </aside>
 

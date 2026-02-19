@@ -10,7 +10,6 @@ function setPoolVisible(visible){
     mini.style.visibility = "hidden";
     mini.style.width = "0";
     mini.style.opacity = "0";
-    localStorage.setItem("poolVisible", "1");
   }else{
     drawer.style.visibility = "hidden";
     drawer.style.width = "0";
@@ -18,15 +17,25 @@ function setPoolVisible(visible){
     mini.style.visibility = "visible";
     mini.style.width = "78px";
     mini.style.opacity = "1";
-    localStorage.setItem("poolVisible", "0");
   }
 }
 
 function togglePool(){
-  const drawer = document.getElementById("poolDrawer");
-  if(!drawer) return;
-  const visible = drawer.style.visibility !== "hidden" && drawer.style.width !== "0";
-  setPoolVisible(!visible);
+  // Get current URL parameters
+  const url = new URL(window.location.href);
+  const currentPool = url.searchParams.get("pool") || "0";
+  const actingKid = url.searchParams.get("acting_kid");
+
+  // Toggle pool state
+  const newPool = currentPool === "1" ? "0" : "1";
+
+  // Build new URL
+  const newUrl = new URL(window.location.origin + "/board");
+  if(actingKid) newUrl.searchParams.set("acting_kid", actingKid);
+  newUrl.searchParams.set("pool", newPool);
+
+  // Navigate to new URL
+  window.location.href = newUrl.toString();
 }
 
 async function unlockGamemaster(){
@@ -55,6 +64,33 @@ async function postMove(instanceId, status){
 
   if(!res.ok){
     throw new Error(data.error || "Move failed");
+  }
+  return data;
+}
+
+// ADDED: New function to approve an instance when dragged to Done
+async function postApprove(instanceId){
+  const form = new FormData();
+
+  const res = await fetch(`/instances/${instanceId}/approve-drag`, { method: "POST", body: form });
+  const data = await res.json().catch(()=>({error:"Approve failed"}));
+
+  if(!res.ok){
+    throw new Error(data.error || "Approve failed");
+  }
+  return data;
+}
+
+// MODIFIED: Pass target status to unapprove endpoint
+async function postUnapprove(instanceId, targetStatus){
+  const form = new FormData();
+  form.append("status", targetStatus);
+
+  const res = await fetch(`/instances/${instanceId}/unapprove`, { method: "POST", body: form });
+  const data = await res.json().catch(()=>({error:"Unapprove failed"}));
+
+  if(!res.ok){
+    throw new Error(data.error || "Unapprove failed");
   }
   return data;
 }
@@ -115,22 +151,49 @@ function initPoolSortable(){
   });
 }
 
+// ADDED: Check if GM is unlocked by looking at page data
+function isGMUnlocked(){
+  const body = document.body;
+  return body.getAttribute("data-gm-unlocked") === "true";
+}
+
 function initColumnSortable(columnId){
   const el = document.getElementById(columnId);
   if(!el) return;
 
-  // Prevent drops into the Done (Claim Reward) column
   const isDoneColumn = columnId === "colDone";
+  const gmUnlocked = isGMUnlocked();
+
+  // CHANGED: GM can drop into Done column, but templates cannot be dropped there
+  const allowPut = isDoneColumn ? gmUnlocked : true;
+  // CHANGED: GM can pull from Done column, regular users cannot
+  const allowPull = isDoneColumn ? (gmUnlocked ? true : false) : true;
 
   new Sortable(el, {
-    group: { name: "kanban", pull: true, put: !isDoneColumn },
+    group: { name: "kanban", pull: allowPull, put: allowPut },
     animation: 120,
 
     onAdd: async function (evt) {
       const status = evt.to.getAttribute("data-status");
+      const fromStatus = evt.from.getAttribute("data-status");
 
       const templateId = evt.item.getAttribute("data-template-id");
       if(templateId){
+        // CHANGED: Templates cannot be dropped into Done column, even for GM
+        if(status === "done"){
+          alert("Templates cannot be placed directly into Claim Reward. Please create the task in another column first.");
+          evt.item.remove();
+          return;
+        }
+
+        // CHANGED: Players can now drop templates into "doing" OR "review"
+        // GM can drop into any non-Done column
+        if(!gmUnlocked && status !== "doing" && status !== "review"){
+          alert("Templates can be dropped into 'On an Adventure' or 'Ready for Check'.");
+          evt.item.remove();
+          return;
+        }
+
         const pool = document.getElementById("poolList");
         const actingKidId = pool?.getAttribute("data-acting-kid");
         if(!actingKidId || actingKidId === "None"){
@@ -151,9 +214,40 @@ function initColumnSortable(columnId){
       const instanceId = evt.item.getAttribute("data-instance-id");
       if(instanceId && status){
         try{
-          await postMove(instanceId, status);
-          await persistOrder(status, evt.to);
-          window.location.reload();
+          // FIXED: Check if moving FROM Done column FIRST (before checking TO)
+          if(fromStatus === "done" && gmUnlocked){
+            // Moving FROM Done to another column - unapprove AND change status in one call
+            await postUnapprove(instanceId, status);
+            await persistOrder(status, evt.to);
+            window.location.reload();
+          }
+          // CHANGED: If moving TO Done column, use approve endpoint
+          else if(status === "done" && gmUnlocked){
+            await postApprove(instanceId);
+            await persistOrder(status, evt.to);
+            window.location.reload();
+          }
+          else if(status === "done" && !gmUnlocked){
+            // Should never happen due to put restriction, but just in case
+            alert("Only Game Master can move tasks to Claim Reward.");
+            evt.item.remove();
+            window.location.reload();
+          } else {
+            // CHANGED: For non-Done columns, check if GM or if move is allowed
+            if(!gmUnlocked){
+              // CHANGED: Players can now move between "doing" and "review" freely
+              if(!isValidUserMove(fromStatus, status)){
+                alert("You can move tasks between 'On an Adventure' and 'Ready for Check', but cannot move from 'Claim Reward'.");
+                evt.item.remove();
+                window.location.reload();
+                return;
+              }
+            }
+            // GM can move anywhere, regular users follow workflow
+            await postMove(instanceId, status);
+            await persistOrder(status, evt.to);
+            window.location.reload();
+          }
         }catch(e){
           alert(e.message || "Move failed");
           window.location.reload();
@@ -166,6 +260,16 @@ function initColumnSortable(columnId){
       await persistOrder(status, evt.to);
     }
   });
+}
+
+// MODIFIED: Check if a move is valid for regular users (bidirectional between doing/review)
+function isValidUserMove(fromStatus, toStatus){
+  const workflow = {
+    "doing": ["review"],      // Can move from doing to review
+    "review": ["doing"],      // CHANGED: Can move back from review to doing
+    "done": []                // Cannot move from done (GM only)
+  };
+  return workflow[fromStatus]?.includes(toStatus) || false;
 }
 
 /* --------------------------
@@ -292,10 +396,7 @@ function handleCollectSubmit(e){
 --------------------------- */
 
 window.addEventListener("DOMContentLoaded", () => {
-  const vis = localStorage.getItem("poolVisible");
-  if(vis === "0") setPoolVisible(false);
-  else setPoolVisible(true);
-
+  // No need to set visibility here - server handles it
   initPoolSortable();
   initColumnSortable("colDoing");
   initColumnSortable("colReview");

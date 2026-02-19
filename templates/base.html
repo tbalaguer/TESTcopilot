@@ -8,7 +8,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
     <script defer src="{{ url_for('static', filename='board.js') }}"></script>
   </head>
-  <body>
+  <body data-gm-unlocked="{{ 'true' if gm_unlocked else 'false' }}">
     <header class="topbar">
       <div class="brand"><a href="{{ url_for('board') }}" class="brandLink">Family Board</a></div>
       <div class="spacer"></div>
