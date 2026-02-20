@@ -124,7 +124,7 @@
           {# Task instance card #}
           <div class="card" style="background: rgba(17,31,56,.55)" id="task-{{entry.data.id}}">
             <div class="row" style="align-items:center;" id="task-display-{{entry.data.id}}">
-              <strong>{{entry.data.template.title}}</strong>
+              <strong>{{entry.data.title if entry.data.title else (entry.data.template.title if entry.data.template else "Deleted Template")}}</strong>
               <div class="spacer"></div>
               <span class="pill small">{{entry.data.points_awarded}} pts</span>
 
@@ -151,7 +151,7 @@
             <div id="task-edit-{{entry.data.id}}" style="display:none; margin-top:10px;" class="stack">
               <div>
                 <label class="muted">Title</label>
-                <input type="text" id="task-edit-title-{{entry.data.id}}" value="{{entry.data.template.title}}" />
+                <input type="text" id="task-edit-title-{{entry.data.id}}" value="{{entry.data.title if entry.data.title else (entry.data.template.title if entry.data.template else 'Deleted Template')}}" />
               </div>
               <div>
                 <label class="muted">Points</label>

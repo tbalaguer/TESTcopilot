@@ -1,6 +1,6 @@
 <div class="card ticketCard" data-instance-id="{{inst.id}}">
   <div class="row" style="align-items:center;">
-    <div style="font-weight:900;">{{inst.title if inst.title else inst.template.title}}</div>
+    <div style="font-weight:900;">{{inst.title if inst.title else (inst.template.title if inst.template else "Deleted Template")}}</div>
     <div class="spacer"></div>
     <div class="pill small">{{inst.points_awarded}} pts</div>
   </div>
@@ -94,11 +94,7 @@
       <!-- Details field - available for everyone -->
       <div>
         <label class="muted">Details</label>
-        <textarea
-          id="editDetails_{{inst.id}}"
-          placeholder="e.g., Cleaned the car / vacuumed the rug"
-          rows="4"
-        >{{inst.details}}</textarea>
+        <textarea id="editDetails_{{inst.id}}" placeholder="e.g., Cleaned the car / vacuumed the rug" rows="4">{{inst.details if inst.details else ''}}</textarea>
       </div>
 
       <div class="row">
@@ -108,43 +104,3 @@
     </div>
   {% endif %}
 </div>
-
-<script>
-function toggleCardEdit(instId) {
-  const editDiv = document.getElementById(`cardEdit_${instId}`);
-  if (editDiv.style.display === 'none') {
-    editDiv.style.display = 'block';
-  } else {
-    editDiv.style.display = 'none';
-  }
-}
-
-async function saveCardEdit(instId, isGM) {
-  const form = new FormData();
-
-  // Only send title, points, and player if Game Master
-  if (isGM) {
-    const titleField = document.getElementById(`editTitle_${instId}`);
-    const pointsField = document.getElementById(`editPoints_${instId}`);
-    const kidField = document.getElementById(`editKid_${instId}`);
-
-    if (titleField) form.append('title', titleField.value);
-    if (pointsField) form.append('points_awarded', pointsField.value);
-    if (kidField) form.append('assigned_kid_id', kidField.value);
-  }
-
-  // Always send details (for both GM and Players)
-  const detailsField = document.getElementById(`editDetails_${instId}`);
-  if (detailsField) {
-    form.append('details', detailsField.value);
-  }
-
-  const res = await fetch(`/instances/${instId}/edit`, {method: 'POST', body: form});
-  if (res.ok) {
-    location.reload();
-  } else {
-    const data = await res.json().catch(() => ({error: 'Failed to save'}));
-    alert(data.error || 'Failed to save');
-  }
-}
-</script>

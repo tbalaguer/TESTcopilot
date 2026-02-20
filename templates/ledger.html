@@ -116,9 +116,29 @@
                     </div>
                   </td>
 
-                  <!-- Note Column -->
+                  <!-- Note Column - FIXED: Show current instance title if available -->
                   <td style="padding:10px; vertical-align:top;">
-                    {% if entry.note %}
+                    {% if entry.instance_id %}
+                      <!-- For task entries, show the current instance title -->
+                      {% set instance = entry.instance %}
+                      {% if instance %}
+                        <div style="font-size:0.9rem; color: rgba(255,255,255,0.7);">
+                          {% if instance.title %}
+                            {{instance.title}}
+                          {% elif instance.template %}
+                            {{instance.template.title}}
+                          {% else %}
+                            Deleted Template
+                          {% endif %}
+                        </div>
+                      {% else %}
+                        <!-- Instance was deleted, show original note -->
+                        <div style="font-size:0.9rem; color: rgba(255,255,255,0.5); font-style: italic;">
+                          {{entry.note}} (deleted)
+                        </div>
+                      {% endif %}
+                    {% elif entry.note %}
+                      <!-- For manual adjustments and rent, show the note -->
                       <div style="font-size:0.9rem; color: rgba(255,255,255,0.7);">{{entry.note}}</div>
                     {% else %}
                       <div style="font-size:0.9rem; color: rgba(255,255,255,0.3);">—</div>

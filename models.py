@@ -66,9 +66,15 @@ class TaskInstance(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-    template_id: Mapped[int] = mapped_column(ForeignKey("task_templates.id"), index=True)
+    # UPDATED: Make template_id nullable with ON DELETE SET NULL
+    template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("task_templates.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True
+    )
     assigned_kid_id: Mapped[int] = mapped_column(ForeignKey("kids.id"), index=True)
 
+    title: Mapped[str] = mapped_column(String(140), default="")
     points_awarded: Mapped[int] = mapped_column(Integer)
     details: Mapped[str] = mapped_column(String(1000), default="")
 
@@ -80,10 +86,10 @@ class TaskInstance(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    # IMPORTANT: matches DB column you added
     archived: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
-    template: Mapped["TaskTemplate"] = relationship()
+    # UPDATED: Relationship can now be None
+    template: Mapped["TaskTemplate | None"] = relationship()
     assigned_kid: Mapped["Kid"] = relationship()
 
 
@@ -94,21 +100,20 @@ class PointsLedger(Base):
     kid_id: Mapped[int] = mapped_column(ForeignKey("kids.id"), index=True)
     amount: Mapped[int] = mapped_column(Integer)
     reason: Mapped[LedgerReason] = mapped_column(Enum(LedgerReason), index=True)
-    instance_id: Mapped[int | None] = mapped_column(ForeignKey("task_instances.id"), nullable=True)
+    instance_id: Mapped[int | None] = mapped_column(
+        ForeignKey("task_instances.id"), nullable=True, index=True
+    )
     note: Mapped[str] = mapped_column(String(255), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-    kid: Mapped["Kid"] = relationship()
 
 
 class RentPolicy(Base):
     __tablename__ = "rent_policies"
-    __table_args__ = (UniqueConstraint("kid_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    kid_id: Mapped[int] = mapped_column(ForeignKey("kids.id"), index=True)
+    kid_id: Mapped[int] = mapped_column(ForeignKey("kids.id"), unique=True, index=True)
     rent_amount: Mapped[int] = mapped_column(Integer, default=50)
     rent_day_of_month: Mapped[int] = mapped_column(Integer, default=1)
     last_charged_on: Mapped[date | None] = mapped_column(Date, nullable=True)
 
-    kid: Mapped["Kid"] = relationship()
+    __table_args__ = (UniqueConstraint("kid_id", name="uq_rent_kid"),)

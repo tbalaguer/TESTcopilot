@@ -414,15 +414,32 @@ function toggleCardEdit(instanceId) {
   editDiv.style.display = editDiv.style.display === 'none' ? 'block' : 'none';
 }
 
-async function saveCardEdit(instanceId) {
-  const title = document.getElementById('editTitle_' + instanceId)?.value?.trim();
-  const points = document.getElementById('editPoints_' + instanceId)?.value;
-  const kidId = document.getElementById('editKid_' + instanceId)?.value;
-
+// CORRECTED: Added isGM parameter and details field
+async function saveCardEdit(instanceId, isGM) {
   const form = new FormData();
-  if (title) form.append('title', title);
-  if (points !== undefined && points !== '') form.append('points_awarded', points);
-  if (kidId) form.append('assigned_kid_id', kidId);
+
+  // Only send title, points, and player if Game Master
+  if (isGM) {
+    const titleField = document.getElementById('editTitle_' + instanceId);
+    const pointsField = document.getElementById('editPoints_' + instanceId);
+    const kidField = document.getElementById('editKid_' + instanceId);
+
+    if (titleField && titleField.value.trim()) {
+      form.append('title', titleField.value.trim());
+    }
+    if (pointsField && pointsField.value !== undefined && pointsField.value !== '') {
+      form.append('points_awarded', pointsField.value);
+    }
+    if (kidField && kidField.value) {
+      form.append('assigned_kid_id', kidField.value);
+    }
+  }
+
+  // CRITICAL FIX: Always send details (for both GM and Players)
+  const detailsField = document.getElementById('editDetails_' + instanceId);
+  if (detailsField) {
+    form.append('details', detailsField.value);
+  }
 
   try {
     const res = await fetch('/instances/' + instanceId + '/edit', { method: 'POST', body: form });
