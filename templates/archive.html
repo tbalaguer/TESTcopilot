@@ -121,12 +121,15 @@
             </div>
           </div>
         {% else %}
-          {# Task instance card #}
+          {# Task instance card - FIXED: Color logic like Manual Adjustment #}
           <div class="card" style="background: rgba(17,31,56,.55)" id="task-{{entry.data.id}}">
             <div class="row" style="align-items:center;" id="task-display-{{entry.data.id}}">
               <strong>{{entry.data.title if entry.data.title else (entry.data.template.title if entry.data.template else "Deleted Template")}}</strong>
               <div class="spacer"></div>
-              <span class="pill small">{{entry.data.points_awarded}} pts</span>
+              <!-- FIXED: Apply same color logic as Manual Adjustment -->
+              <span class="pill small" style="{% if entry.data.points_awarded > 0 %}color: #22c55e;{% elif entry.data.points_awarded == 0 %}color: #ef4444;{% else %}color: #ef4444;{% endif %}">
+                {% if entry.data.points_awarded > 0 %}+{% endif %}{{entry.data.points_awarded}} pts
+              </span>
 
               {% if gm_unlocked %}
                 <button class="btn" type="button" onclick="editTask({{entry.data.id}})" style="margin-left:8px; background:#3b82f6; color:white;">Edit</button>

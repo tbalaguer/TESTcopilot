@@ -6,6 +6,7 @@
   --muted:#a7b4d3;
   --border:#243454;
   --primary:#60a5fa;
+  --success:#22c55e;
 }
 
 *{box-sizing:border-box}
@@ -61,11 +62,36 @@ textarea{min-height:70px; resize: vertical;}
   background:#0b162b;
   color:var(--text);
   cursor:pointer;
+  font-weight:600;
+  transition: all 0.2s ease;
+}
+
+.btn:hover{
+  background:#132038;
+  border-color: rgba(96,165,250,.4);
 }
 
 .btn.primary{
   border-color: rgba(96,165,250,.8);
   background: rgba(96,165,250,.15);
+  color:white;
+}
+
+.btn.primary:hover{
+  background: rgba(96,165,250,.25);
+  border-color: rgba(96,165,250,1);
+}
+
+/* Success button (green) - for Approve button */
+.btn.success{
+  border-color: rgba(34,197,94,.8);
+  background: rgba(34,197,94,.15);
+  color:white;
+}
+
+.btn.success:hover{
+  background: rgba(34,197,94,.25);
+  border-color: rgba(34,197,94,1);
 }
 
 /* Gamemaster button styles */
@@ -82,6 +108,11 @@ textarea{min-height:70px; resize: vertical;}
 .btn.danger{
   border-color: rgba(239,68,68,.85);
   background: rgba(239,68,68,.14);
+}
+
+.btn.danger:hover{
+  background: rgba(239,68,68,.25);
+  border-color: rgba(239,68,68,1);
 }
 
 .alert{padding:10px;border:1px solid #b91c1c;background: rgba(185,28,28,.2); border-radius:10px;}
@@ -118,14 +149,10 @@ textarea{min-height:70px; resize: vertical;}
   width: 360px;
   transition: width 0.3s ease, opacity 0.3s ease;
   overflow: hidden;
-  /*border:1px solid var(--border);
-  border-radius:14px;
-  background: rgba(15,26,46,.35);*/
   display: flex;
   flex-direction: column;
   margin-left: 16px;
   margin-right: 37px;
-  /*padding: 14px;*/
 }
 
 /* Pool mini column (collapsed) */
@@ -210,6 +237,7 @@ textarea{min-height:70px; resize: vertical;}
   gap:7px;
   flex: 1;
 }
+
 .column{
   background: rgba(15,26,46,.35);
   border:1px solid var(--border);
@@ -245,11 +273,9 @@ textarea{min-height:70px; resize: vertical;}
   border-bottom: 1px solid rgba(38, 55, 89, 0.1);
 }
 .doneColumn .colBody{
-  /* CHANGED: Use pseudo-element for background pattern so opacity doesn't affect cards */
   position: relative;
 }
 .doneColumn .colBody::before{
-  /* ADDED: Create a pseudo-element for the background pattern */
   content: "";
   position: absolute;
   top: 0;
@@ -259,12 +285,10 @@ textarea{min-height:70px; resize: vertical;}
   background: rgb(38, 55, 89);
   background-image: repeating-linear-gradient(-45deg, transparent, transparent 30px, black 10px, black 35px);
   opacity: 0.20;
-  /* ADDED: Ensure pattern stays behind cards */
   z-index: 0;
   pointer-events: none;
 }
 .doneColumn .colBody > *{
-  /* ADDED: Ensure all child elements (cards) are above the background */
   position: relative;
   z-index: 1;
 }
@@ -326,14 +350,11 @@ textarea{min-height:70px; resize: vertical;}
     flex-direction: column;
     margin-left: 0;
     padding-right: 0;
-    /* ADDED: Remove max-height on mobile for better usability */
-    max-height: none;
   }
   .pool, .poolMini{
-    width: 100%;
-    max-width: 100%;
-    margin-left: 0;
-    margin-right: 0;
+    width: 100%!important;
+    max-width: 100%!important;
+    margin: 0 0 14px 0!important;
   }
   .columns{
     grid-template-columns: 1fr;
