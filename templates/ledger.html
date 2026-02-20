@@ -23,7 +23,7 @@
       <!-- Balance Card - Full Width -->
       <div class="card" style="background: rgba(17,31,56,.65); margin-bottom:14px;">
         <div style="font-size:2rem; font-weight:900;">{{balance}} pts</div>
-        <div class="muted">Current balance</div>
+        <div class="muted">Current Balance</div>
       </div>
 
       {% if gm_unlocked %}
@@ -145,14 +145,22 @@
                     {% endif %}
                   </td>
 
-                  <!-- Amount Column - BLUE for rent, GREEN for positive, RED for negative -->
+                  <!-- Amount Column - FIXED: Show current instance points if available -->
                   <td style="padding:10px; text-align:right; vertical-align:top;">
-                    <div style="font-size:1.1rem; font-weight:700;
-                      {% if entry.reason.value == 'rent_paid' %}color: #60a5fa;
-                      {% elif entry.amount > 0 %}color: #22c55e;
-                      {% else %}color: #ef4444;{% endif %}">
-                      {% if entry.amount > 0 %}+{% endif %}{{entry.amount}} pts
-                    </div>
+                    {% if entry.instance_id and entry.instance %}
+                      <!-- For task entries, show the current instance points -->
+                      <div style="font-size:1.1rem; font-weight:700; color: #22c55e;">
+                        +{{entry.instance.points_awarded}} pts
+                      </div>
+                    {% else %}
+                      <!-- For manual adjustments and rent, show the ledger amount -->
+                      <div style="font-size:1.1rem; font-weight:700;
+                        {% if entry.reason.value == 'rent_paid' %}color: #60a5fa;
+                        {% elif entry.amount > 0 %}color: #22c55e;
+                        {% else %}color: #ef4444;{% endif %}">
+                        {% if entry.amount > 0 %}+{% endif %}{{entry.amount}} pts
+                      </div>
+                    {% endif %}
                   </td>
 
                   <!-- Actions Column (Delete Button) - Only visible when GM unlocked -->

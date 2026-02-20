@@ -66,7 +66,7 @@ class TaskInstance(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-    # UPDATED: Make template_id nullable with ON DELETE SET NULL
+    # FIXED: Make template_id nullable with ON DELETE SET NULL
     template_id: Mapped[int | None] = mapped_column(
         ForeignKey("task_templates.id", ondelete="SET NULL"),
         nullable=True,
@@ -74,7 +74,9 @@ class TaskInstance(Base):
     )
     assigned_kid_id: Mapped[int] = mapped_column(ForeignKey("kids.id"), index=True)
 
+    # ADDED: Instance-specific title (independent from template)
     title: Mapped[str] = mapped_column(String(140), default="")
+
     points_awarded: Mapped[int] = mapped_column(Integer)
     details: Mapped[str] = mapped_column(String(1000), default="")
 
@@ -86,9 +88,10 @@ class TaskInstance(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    # IMPORTANT: matches DB column you added
     archived: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
-    # UPDATED: Relationship can now be None
+    # FIXED: Relationship can now be None
     template: Mapped["TaskTemplate | None"] = relationship()
     assigned_kid: Mapped["Kid"] = relationship()
 
@@ -100,11 +103,13 @@ class PointsLedger(Base):
     kid_id: Mapped[int] = mapped_column(ForeignKey("kids.id"), index=True)
     amount: Mapped[int] = mapped_column(Integer)
     reason: Mapped[LedgerReason] = mapped_column(Enum(LedgerReason), index=True)
-    instance_id: Mapped[int | None] = mapped_column(
-        ForeignKey("task_instances.id"), nullable=True, index=True
-    )
+    instance_id: Mapped[int | None] = mapped_column(ForeignKey("task_instances.id"), nullable=True, index=True)
     note: Mapped[str] = mapped_column(String(255), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    kid: Mapped["Kid"] = relationship()
+    # ADDED: Relationship to access the instance for displaying current title
+    instance: Mapped["TaskInstance | None"] = relationship()
 
 
 class RentPolicy(Base):

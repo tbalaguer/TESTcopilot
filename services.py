@@ -8,8 +8,14 @@ from models import (
 )
 
 def kid_balance(db: Session, kid_id: int) -> int:
-    total = db.scalar(select(func.coalesce(func.sum(PointsLedger.amount), 0)).where(PointsLedger.kid_id == kid_id))
-    return int(total or 0)
+    entries = db.scalars(select(PointsLedger).where(PointsLedger.kid_id == kid_id)).all()
+    total = 0
+    for entry in entries:
+        if entry.instance_id and entry.instance:
+            total += entry.instance.points_awarded
+        else:
+            total += entry.amount
+    return total
 
 def months_covered(balance: int, rent_amount: int) -> float:
     if rent_amount <= 0:
@@ -81,8 +87,8 @@ def approve_instance(db: Session, instance_id: int):
         raise ValueError("Instance is not in Review.")
 
     inst.status = InstanceStatus.done
-    inst.approved_at = datetime.now()
-    inst.archived = False  # ensure it appears in Done lane and is collectible
+    inst.approved_at = datetime.utcnow()
+    inst.archived = False
 
     # Re-enable the template
     tmpl = db.get(TaskTemplate, inst.template_id)
