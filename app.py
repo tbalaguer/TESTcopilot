@@ -69,6 +69,22 @@ def format_approved(dt):
 
 
 # ADDED: Template filter for formatting dates in Pacific Time
+@app.template_filter('datetime_local')
+def datetime_local(dt):
+    """Format datetime as 'YYYY-MM-DDTHH:MM' in Pacific Time for datetime-local inputs"""
+    if dt is None:
+        return ""
+    if isinstance(dt, str):
+        try:
+            dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+    dt = dt.astimezone(PACIFIC_TZ)
+    return dt.strftime('%Y-%m-%dT%H:%M')
+
+
 @app.template_filter('format_date')
 def format_date(dt):
     """Format datetime as 'MM-DD-YYYY at h:mm AM/PM' in Pacific Time"""
@@ -385,6 +401,7 @@ def create_template():
         db.close()
 
 
+# D.03 FIX: Remove the check that prevents template deletion when instances exist
 @app.post("/templates/<int:template_id>/delete")
 @login_required
 def delete_template(template_id: int):
@@ -398,10 +415,7 @@ def delete_template(template_id: int):
         if not tmpl:
             return redirect_back("board")
 
-        any_inst = db.scalar(select(TaskInstance.id).where(TaskInstance.template_id == template_id).limit(1))
-        if any_inst:
-            return redirect_back("board")
-
+        # D.03 FIX: Templates and instances are now independent - allow deletion regardless
         db.delete(tmpl)
         db.commit()
         return redirect_back("board")
@@ -597,6 +611,142 @@ def collect_route(instance_id: int):
         db.commit()
 
         return redirect_to_board_preserving_acting_kid(fallback_kid=inst_kid)
+    finally:
+        db.close()
+
+
+# CORRECTED: Allow editing title and details for both GM and Players
+@app.post("/instances/<int:instance_id>/edit")
+@login_required
+def edit_instance(instance_id: int):
+    # Allow players to edit details, GM to edit everything
+    # No GM guard here - players need access too
+
+    db = get_db()
+    try:
+        inst = db.get(TaskInstance, instance_id)
+        if not inst:
+            return jsonify({"error": "Task not found"}), 404
+
+        # Check if user is GM
+        is_gm = is_gamemaster_unlocked()
+
+        # Only GM can edit title, points, and player
+        if is_gm:
+            title = request.form.get("title", "").strip()
+            if title:
+                inst.title = title
+
+            points_str = request.form.get("points_awarded", "").strip()
+            if points_str:
+                try:
+                    inst.points_awarded = int(points_str)
+                except ValueError:
+                    return jsonify({"error": "Invalid points value"}), 400
+
+            assigned_kid_str = request.form.get("assigned_kid_id", "").strip()
+            if assigned_kid_str:
+                try:
+                    kid_id = int(assigned_kid_str)
+                except ValueError:
+                    return jsonify({"error": "Invalid player ID"}), 400
+                if not db.get(Kid, kid_id):
+                    return jsonify({"error": "Player not found"}), 404
+                inst.assigned_kid_id = kid_id
+
+            # GM can also edit dates
+            created_at_str = request.form.get("created_at", "").strip()
+            if created_at_str:
+                try:
+                    pt_dt = datetime.fromisoformat(created_at_str)
+                    pt_dt = pt_dt.replace(tzinfo=PACIFIC_TZ)
+                    inst.created_at = pt_dt.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+                except ValueError:
+                    pass
+
+            approved_at_str = request.form.get("approved_at", "").strip()
+            if approved_at_str:
+                try:
+                    pt_dt = datetime.fromisoformat(approved_at_str)
+                    pt_dt = pt_dt.replace(tzinfo=PACIFIC_TZ)
+                    inst.approved_at = pt_dt.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+                except ValueError:
+                    pass
+
+        # CRITICAL FIX: Both GM and Players can edit details
+        # Check if 'details' is in the form data (not just if it's truthy)
+        if 'details' in request.form:
+            details = request.form.get("details", "")
+            inst.details = details[:1000]  # Limit to 1000 characters
+            print(f"DEBUG: Saving details for instance {instance_id}: '{details[:50]}...'")  # Debug log
+
+        db.commit()
+        print(f"DEBUG: Successfully saved instance {instance_id}")  # Debug log
+        return jsonify({"ok": True})
+    except Exception as e:
+        db.rollback()
+        print(f"DEBUG: Error saving instance {instance_id}: {e}")  # Debug log
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
+    finally:
+        db.close()
+
+
+# D.02 FIX: Add endpoint for editing archived task instances
+@app.post("/instances/<int:instance_id>/edit-archive")
+@login_required
+def edit_archived_instance(instance_id: int):
+    g = gm_guard_or_redirect()
+    if g:
+        return g
+
+    db = get_db()
+    try:
+        inst = db.get(TaskInstance, instance_id)
+        if not inst:
+            return jsonify({"error": "Task not found"}), 404
+
+        # UPDATED: Edit instance title
+        title = request.form.get("title", "").strip()
+        if title:
+            inst.title = title
+
+        points_str = request.form.get("points_awarded", "").strip()
+        if points_str:
+            try:
+                inst.points_awarded = int(points_str)
+            except ValueError:
+                return jsonify({"error": "Invalid points value"}), 400
+
+        # CRITICAL FIX: Check if 'details' is in form data
+        if 'details' in request.form:
+            details = request.form.get("details", "")
+            inst.details = details[:1000]
+
+        created_at_str = request.form.get("created_at", "").strip()
+        if created_at_str:
+            try:
+                pt_dt = datetime.fromisoformat(created_at_str)
+                pt_dt = pt_dt.replace(tzinfo=PACIFIC_TZ)
+                inst.created_at = pt_dt.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+            except ValueError:
+                pass
+
+        approved_at_str = request.form.get("approved_at", "").strip()
+        if approved_at_str:
+            try:
+                pt_dt = datetime.fromisoformat(approved_at_str)
+                pt_dt = pt_dt.replace(tzinfo=PACIFIC_TZ)
+                inst.approved_at = pt_dt.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+            except ValueError:
+                pass
+
+        db.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 400
     finally:
         db.close()
 
@@ -862,6 +1012,53 @@ def delete_ledger_entry(ledger_id: int):
         db.close()
 
 
+# D.02 FIX: Add endpoint for editing ledger entries (manual adjustments and rent)
+@app.post("/ledger/<int:ledger_id>/edit")
+@login_required
+def edit_ledger_entry(ledger_id: int):
+    g = gm_guard_or_redirect()
+    if g:
+        return g
+
+    db = get_db()
+    try:
+        ledger_entry = db.get(PointsLedger, ledger_id)
+        if not ledger_entry:
+            return jsonify({"error": "Entry not found"}), 404
+
+        # Only allow editing manual adjustments and rent
+        if ledger_entry.reason not in [LedgerReason.manual_adjustment, LedgerReason.rent_paid]:
+            return jsonify({"error": "Cannot edit this entry type"}), 400
+
+        amount_str = request.form.get("amount", "").strip()
+        if amount_str:
+            try:
+                ledger_entry.amount = int(amount_str)
+            except ValueError:
+                return jsonify({"error": "Invalid amount value"}), 400
+
+        note = request.form.get("note", None)
+        if note is not None:
+            ledger_entry.note = note[:255]
+
+        created_at_str = request.form.get("created_at", "").strip()
+        if created_at_str:
+            try:
+                pt_dt = datetime.fromisoformat(created_at_str)
+                pt_dt = pt_dt.replace(tzinfo=PACIFIC_TZ)
+                ledger_entry.created_at = pt_dt.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+            except ValueError:
+                pass
+
+        db.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 400
+    finally:
+        db.close()
+
+
 # FIXED: Charge rent in Pacific Time
 @app.post("/rent/charge")
 @login_required
@@ -922,3 +1119,7 @@ def charge_rent():
             return redirect(url_for("board"))
     finally:
         db.close()
+
+
+if __name__ == "__main__":
+    app.run(debug=True)

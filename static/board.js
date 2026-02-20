@@ -407,3 +407,35 @@ window.saveDetails = saveDetails;
 window.togglePool = togglePool;
 window.unlockGamemaster = unlockGamemaster;
 window.handleCollectSubmit = handleCollectSubmit;
+
+function toggleCardEdit(instanceId) {
+  const editDiv = document.getElementById('cardEdit_' + instanceId);
+  if (!editDiv) return;
+  editDiv.style.display = editDiv.style.display === 'none' ? 'block' : 'none';
+}
+
+async function saveCardEdit(instanceId) {
+  const title = document.getElementById('editTitle_' + instanceId)?.value?.trim();
+  const points = document.getElementById('editPoints_' + instanceId)?.value;
+  const kidId = document.getElementById('editKid_' + instanceId)?.value;
+
+  const form = new FormData();
+  if (title) form.append('title', title);
+  if (points !== undefined && points !== '') form.append('points_awarded', points);
+  if (kidId) form.append('assigned_kid_id', kidId);
+
+  try {
+    const res = await fetch('/instances/' + instanceId + '/edit', { method: 'POST', body: form });
+    const data = await res.json().catch(() => ({ error: 'Save failed' }));
+    if (!res.ok) {
+      alert(data.error || 'Save failed');
+      return;
+    }
+    window.location.reload();
+  } catch (e) {
+    alert(e.message || 'Save failed');
+  }
+}
+
+window.toggleCardEdit = toggleCardEdit;
+window.saveCardEdit = saveCardEdit;

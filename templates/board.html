@@ -8,7 +8,12 @@
       <h2 style="margin:0;">Players</h2>
       <div class="spacer"></div>
 
-      <a class="btn" href="{{ url_for('archive') }}">Treasure Chest</a>
+      <!-- D.01: Swap positions - Treasure Chest button goes where Journal Entries was -->
+      <form method="get" action="{{ url_for('ledger', kid_id=acting_kid) }}">
+        <button class="btn" type="submit">
+          {{ kids | selectattr("id", "equalto", acting_kid) | map(attribute="name") | first }}'s Treasure Chest
+        </button>
+      </form>
     </div>
 
     <div class="row" style="margin-top:10px; align-items:flex-start;">
@@ -29,17 +34,12 @@
         </div>
       </div>
 
-      <!-- Right side: Wallet button for the currently active player -->
+      <!-- D.01: Journal Entries button goes where Treasure Chest was (right side, GM only) -->
+      {% if gm_unlocked %}
       <div class="filter" style="margin-left:auto; text-align:right;">
-        <strong>Wallet:</strong>
-        <div class="row" style="justify-content:flex-end;">
-          <form method="get" action="{{ url_for('ledger', kid_id=acting_kid) }}">
-            <button class="btn" type="submit">
-              {{ kids | selectattr("id", "equalto", acting_kid) | map(attribute="name") | first }}
-            </button>
-          </form>
-        </div>
+        <a class="btn" href="{{ url_for('archive') }}">Journal Entries</a>
       </div>
+      {% endif %}
     </div>
   </div>
 </div>
@@ -88,7 +88,7 @@
 
             {% if gm_unlocked %}
               <form method="post" action="{{ url_for('delete_template', template_id=t.id) }}"
-                    onsubmit="return confirm('Delete template? This is only allowed if no instances exist for it.');">
+                    onsubmit="return confirm('Delete this template?');">
                 <button class="btn danger" type="submit">Delete</button>
               </form>
             {% endif %}

@@ -32,9 +32,11 @@ def create_instance_from_template(db: Session, template_id: int, kid_id: int) ->
     if not tmpl.available:
         raise ValueError("That task is currently hidden. Use Refresh Pool or finish the active one.")
 
+    # UPDATED: Copy title from template to instance
     inst = TaskInstance(
         template_id=tmpl.id,
         assigned_kid_id=kid_id,
+        title=tmpl.title,  # Copy title so instance is independent
         points_awarded=tmpl.default_points,
         details="",
         status=InstanceStatus.doing,
@@ -64,8 +66,7 @@ def update_instance_details(db: Session, instance_id: int, details: str):
     inst = db.get(TaskInstance, instance_id)
     if not inst:
         raise ValueError("Instance not found")
-    if inst.status == InstanceStatus.done:
-        raise ValueError("Cannot edit details after Done.")
+    # UPDATED: Allow editing details even when done - removed status check
     inst.details = (details or "")[:1000]
 
 def approve_instance(db: Session, instance_id: int):
@@ -83,9 +84,7 @@ def approve_instance(db: Session, instance_id: int):
     inst.approved_at = datetime.now()
     inst.archived = False  # ensure it appears in Done lane and is collectible
 
-    # IMPORTANT: do NOT add PointsLedger entry here
-
-    # Re-enable the template now that work is approved (you asked for that behavior)
+    # Re-enable the template
     tmpl = db.get(TaskTemplate, inst.template_id)
     if tmpl and not tmpl.available:
         tmpl.available = True
@@ -115,12 +114,13 @@ def collect_instance(db: Session, instance_id: int):
     # Mark collected (archived) and award points
     inst.archived = True
 
+    # UPDATED: Use instance title instead of template title
     db.add(PointsLedger(
         kid_id=inst.assigned_kid_id,
         amount=+inst.points_awarded,
         reason=LedgerReason.task_approved,
         instance_id=inst.id,
-        note=f"Collected: {inst.template.title}",
+        note=f"Collected: {inst.title}",
     ))
 
 def refresh_pool(db: Session):

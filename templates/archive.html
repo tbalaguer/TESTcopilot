@@ -2,10 +2,8 @@
 {% block content %}
   <div class="card">
     <div class="row" style="align-items:center;">
-      <h2 style="margin:0;">Treasure Chest</h2>
+      <h2 style="margin:0;">Journal Entries</h2>
       <div class="spacer"></div>
-
-      {# Game Master button is already in base.html topbar; do not render it here to avoid duplicates #}
 
       <a class="btn" href="{{ url_for('board') }}">Back to board</a>
     </div>
@@ -28,8 +26,8 @@
       {% for entry in all_entries %}
         {% if entry.type == 'adjustment' %}
           {# Manual adjustment card #}
-          <div class="card" style="background: rgba(17,31,56,.55); border-left: 3px solid rgba(250,204,21,.6);">
-            <div class="row" style="align-items:center;">
+          <div class="card" style="background: rgba(17,31,56,.55); border-left: 3px solid rgba(250,204,21,.6);" id="adj-{{entry.data.id}}">
+            <div class="row" style="align-items:center;" id="adj-display-{{entry.data.id}}">
               <strong>Manual Adjustment</strong>
               <div class="spacer"></div>
               <span class="pill small" style="{% if entry.data.amount > 0 %}color: #22c55e;{% else %}color: #ef4444;{% endif %}">
@@ -37,6 +35,7 @@
               </span>
 
               {% if gm_unlocked %}
+                <button class="btn" type="button" onclick="editAdjustment({{entry.data.id}})" style="margin-left:8px; background:#3b82f6; color:white;">Edit</button>
                 <form method="post" action="{{ url_for('delete_ledger_entry', ledger_id=entry.data.id) }}"
                       onsubmit="return confirm('Delete this manual adjustment? This will permanently remove it from the ledger.');"
                       style="margin-left:8px;">
@@ -45,18 +44,38 @@
               {% endif %}
             </div>
 
-            <div class="muted">
-              <span class="dot" style="background: {{entry.data.kid.color}}"></span>
-              {{entry.data.kid.name}} — {{ entry.data.created_at | format_date }}
+            <div class="muted" id="adj-meta-{{entry.data.id}}">
+              <span class="dot" style="background: {{entry.kid.color}}"></span>
+              {{entry.kid.name}} — {{ entry.data.created_at | format_date }}
             </div>
             {% if entry.data.note %}
-              <div class="muted" style="margin-top:6px;">Note: {{entry.data.note}}</div>
+              <div class="muted" style="margin-top:6px;" id="adj-note-{{entry.data.id}}">Note: {{entry.data.note}}</div>
             {% endif %}
+
+            <!-- Edit form (hidden by default) -->
+            <div id="adj-edit-{{entry.data.id}}" style="display:none; margin-top:10px;" class="stack">
+              <div>
+                <label class="muted">Amount</label>
+                <input type="number" id="adj-edit-amount-{{entry.data.id}}" value="{{entry.data.amount}}" />
+              </div>
+              <div>
+                <label class="muted">Date</label>
+                <input type="datetime-local" id="adj-edit-date-{{entry.data.id}}" value="" />
+              </div>
+              <div>
+                <label class="muted">Note</label>
+                <input type="text" id="adj-edit-note-{{entry.data.id}}" value="{{entry.data.note}}" />
+              </div>
+              <div class="row">
+                <button class="btn primary" onclick="saveAdjustment({{entry.data.id}})">Save</button>
+                <button class="btn" onclick="cancelEditAdjustment({{entry.data.id}})">Cancel</button>
+              </div>
+            </div>
           </div>
         {% elif entry.type == 'rent' %}
           {# Rent charged card #}
-          <div class="card" style="background: rgba(17,31,56,.55); border-left: 3px solid rgba(96,165,250,.6);">
-            <div class="row" style="align-items:center;">
+          <div class="card" style="background: rgba(17,31,56,.55); border-left: 3px solid rgba(96,165,250,.6);" id="rent-{{entry.data.id}}">
+            <div class="row" style="align-items:center;" id="rent-display-{{entry.data.id}}">
               <strong>Rent Charged</strong>
               <div class="spacer"></div>
               <span class="pill small" style="color: #60a5fa;">
@@ -64,6 +83,7 @@
               </span>
 
               {% if gm_unlocked %}
+                <button class="btn" type="button" onclick="editRent({{entry.data.id}})" style="margin-left:8px; background:#3b82f6; color:white;">Edit</button>
                 <form method="post" action="{{ url_for('delete_ledger_entry', ledger_id=entry.data.id) }}"
                       onsubmit="return confirm('Delete this rent charge? This will permanently remove it from the ledger.');"
                       style="margin-left:8px;">
@@ -72,23 +92,44 @@
               {% endif %}
             </div>
 
-            <div class="muted">
-              <span class="dot" style="background: {{entry.data.kid.color}}"></span>
-              {{entry.data.kid.name}} — {{ entry.data.created_at | format_date }}
+            <div class="muted" id="rent-meta-{{entry.data.id}}">
+              <span class="dot" style="background: {{entry.kid.color}}"></span>
+              {{entry.kid.name}} — {{ entry.data.created_at | format_date }}
             </div>
             {% if entry.data.note %}
-              <div class="muted" style="margin-top:6px;">Note: {{entry.data.note}}</div>
+              <div class="muted" style="margin-top:6px;" id="rent-note-{{entry.data.id}}">Note: {{entry.data.note}}</div>
             {% endif %}
+
+            <!-- Edit form (hidden by default) -->
+            <div id="rent-edit-{{entry.data.id}}" style="display:none; margin-top:10px;" class="stack">
+              <div>
+                <label class="muted">Amount</label>
+                <input type="number" id="rent-edit-amount-{{entry.data.id}}" value="{{entry.data.amount}}" />
+              </div>
+              <div>
+                <label class="muted">Date</label>
+                <input type="datetime-local" id="rent-edit-date-{{entry.data.id}}" value="" />
+              </div>
+              <div>
+                <label class="muted">Note</label>
+                <input type="text" id="rent-edit-note-{{entry.data.id}}" value="{{entry.data.note}}" />
+              </div>
+              <div class="row">
+                <button class="btn primary" onclick="saveRent({{entry.data.id}})">Save</button>
+                <button class="btn" onclick="cancelEditRent({{entry.data.id}})">Cancel</button>
+              </div>
+            </div>
           </div>
         {% else %}
           {# Task instance card #}
-          <div class="card" style="background: rgba(17,31,56,.55)">
-            <div class="row" style="align-items:center;">
+          <div class="card" style="background: rgba(17,31,56,.55)" id="task-{{entry.data.id}}">
+            <div class="row" style="align-items:center;" id="task-display-{{entry.data.id}}">
               <strong>{{entry.data.template.title}}</strong>
               <div class="spacer"></div>
               <span class="pill small">{{entry.data.points_awarded}} pts</span>
 
               {% if gm_unlocked %}
+                <button class="btn" type="button" onclick="editTask({{entry.data.id}})" style="margin-left:8px; background:#3b82f6; color:white;">Edit</button>
                 <form method="post" action="{{ url_for('delete_instance', instance_id=entry.data.id) }}"
                       onsubmit="return confirm('Delete this archived ticket? This will also remove linked points ledger entries.');"
                       style="margin-left:8px;">
@@ -98,11 +139,41 @@
               {% endif %}
             </div>
 
-            <div class="muted">
+            <div class="muted" id="task-meta-{{entry.data.id}}">
               <span class="dot" style="background: {{entry.data.assigned_kid.color}}"></span>
-              {{entry.data.assigned_kid.name}} — {{ entry.data.approved_at | format_approved }}
+              {{entry.data.assigned_kid.name}} — Added: {{ entry.data.created_at | format_date }} | Approved: {{ entry.data.approved_at | format_date }}
             </div>
-            {% if entry.data.details %}<div class="muted" style="margin-top:6px;">Details: {{entry.data.details}}</div>{% endif %}
+            {% if entry.data.details %}
+              <div class="muted" style="margin-top:6px;" id="task-details-{{entry.data.id}}">Details: {{entry.data.details}}</div>
+            {% endif %}
+
+            <!-- Edit form (hidden by default) -->
+            <div id="task-edit-{{entry.data.id}}" style="display:none; margin-top:10px;" class="stack">
+              <div>
+                <label class="muted">Title</label>
+                <input type="text" id="task-edit-title-{{entry.data.id}}" value="{{entry.data.template.title}}" />
+              </div>
+              <div>
+                <label class="muted">Points</label>
+                <input type="number" id="task-edit-points-{{entry.data.id}}" value="{{entry.data.points_awarded}}" min="1" />
+              </div>
+              <div>
+                <label class="muted">Added At</label>
+                <input type="datetime-local" id="task-edit-created-{{entry.data.id}}" value="" />
+              </div>
+              <div>
+                <label class="muted">Approved At</label>
+                <input type="datetime-local" id="task-edit-approved-{{entry.data.id}}" value="" />
+              </div>
+              <div>
+                <label class="muted">Details</label>
+                <textarea id="task-edit-details-{{entry.data.id}}">{{entry.data.details}}</textarea>
+              </div>
+              <div class="row">
+                <button class="btn primary" onclick="saveTask({{entry.data.id}})">Save</button>
+                <button class="btn" onclick="cancelEditTask({{entry.data.id}})">Cancel</button>
+              </div>
+            </div>
           </div>
         {% endif %}
       {% endfor %}
@@ -112,4 +183,144 @@
       {% endif %}
     </div>
   </div>
+
+  <script>
+    // Helper to convert datetime string to datetime-local format
+    function formatDateForInput(dateStr) {
+      // Parse "02-19-2026 at 11:32 AM" format
+      const match = dateStr.match(/(\d{2})-(\d{2})-(\d{4}) at (\d{1,2}):(\d{2}) (AM|PM)/);
+      if (!match) return '';
+
+      const [_, month, day, year, hourStr, minute, ampm] = match;
+      let hour = parseInt(hourStr);
+
+      if (ampm === 'PM' && hour !== 12) hour += 12;
+      if (ampm === 'AM' && hour === 12) hour = 0;
+
+      return `${year}-${month}-${day}T${hour.toString().padStart(2, '0')}:${minute}`;
+    }
+
+    // Adjustment editing
+    function editAdjustment(id) {
+      document.getElementById(`adj-display-${id}`).style.display = 'none';
+      document.getElementById(`adj-meta-${id}`).style.display = 'none';
+      const noteEl = document.getElementById(`adj-note-${id}`);
+      if (noteEl) noteEl.style.display = 'none';
+
+      const editForm = document.getElementById(`adj-edit-${id}`);
+      editForm.style.display = 'block';
+
+      // Set date value
+      const metaText = document.getElementById(`adj-meta-${id}`).textContent;
+      const dateStr = metaText.split('—')[1].trim();
+      document.getElementById(`adj-edit-date-${id}`).value = formatDateForInput(dateStr);
+    }
+
+    function cancelEditAdjustment(id) {
+      document.getElementById(`adj-display-${id}`).style.display = 'flex';
+      document.getElementById(`adj-meta-${id}`).style.display = 'block';
+      const noteEl = document.getElementById(`adj-note-${id}`);
+      if (noteEl) noteEl.style.display = 'block';
+      document.getElementById(`adj-edit-${id}`).style.display = 'none';
+    }
+
+    async function saveAdjustment(id) {
+      const form = new FormData();
+      form.append('amount', document.getElementById(`adj-edit-amount-${id}`).value);
+      form.append('created_at', document.getElementById(`adj-edit-date-${id}`).value);
+      form.append('note', document.getElementById(`adj-edit-note-${id}`).value);
+
+      const res = await fetch(`/ledger/${id}/edit`, {method: 'POST', body: form});
+      if (res.ok) {
+        location.reload();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to save');
+      }
+    }
+
+    // Rent editing
+    function editRent(id) {
+      document.getElementById(`rent-display-${id}`).style.display = 'none';
+      document.getElementById(`rent-meta-${id}`).style.display = 'none';
+      const noteEl = document.getElementById(`rent-note-${id}`);
+      if (noteEl) noteEl.style.display = 'none';
+
+      const editForm = document.getElementById(`rent-edit-${id}`);
+      editForm.style.display = 'block';
+
+      // Set date value
+      const metaText = document.getElementById(`rent-meta-${id}`).textContent;
+      const dateStr = metaText.split('—')[1].trim();
+      document.getElementById(`rent-edit-date-${id}`).value = formatDateForInput(dateStr);
+    }
+
+    function cancelEditRent(id) {
+      document.getElementById(`rent-display-${id}`).style.display = 'flex';
+      document.getElementById(`rent-meta-${id}`).style.display = 'block';
+      const noteEl = document.getElementById(`rent-note-${id}`);
+      if (noteEl) noteEl.style.display = 'block';
+      document.getElementById(`rent-edit-${id}`).style.display = 'none';
+    }
+
+    async function saveRent(id) {
+      const form = new FormData();
+      form.append('amount', document.getElementById(`rent-edit-amount-${id}`).value);
+      form.append('created_at', document.getElementById(`rent-edit-date-${id}`).value);
+      form.append('note', document.getElementById(`rent-edit-note-${id}`).value);
+
+      const res = await fetch(`/ledger/${id}/edit`, {method: 'POST', body: form});
+      if (res.ok) {
+        location.reload();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to save');
+      }
+    }
+
+    // Task editing
+    function editTask(id) {
+      document.getElementById(`task-display-${id}`).style.display = 'none';
+      document.getElementById(`task-meta-${id}`).style.display = 'none';
+      const detailsEl = document.getElementById(`task-details-${id}`);
+      if (detailsEl) detailsEl.style.display = 'none';
+
+      const editForm = document.getElementById(`task-edit-${id}`);
+      editForm.style.display = 'block';
+
+      // Set date values
+      const metaText = document.getElementById(`task-meta-${id}`).textContent;
+      const parts = metaText.split('|');
+      const createdStr = parts[0].split('Added:')[1].trim();
+      const approvedStr = parts[1].split('Approved:')[1].trim();
+
+      document.getElementById(`task-edit-created-${id}`).value = formatDateForInput(createdStr);
+      document.getElementById(`task-edit-approved-${id}`).value = formatDateForInput(approvedStr);
+    }
+
+    function cancelEditTask(id) {
+      document.getElementById(`task-display-${id}`).style.display = 'flex';
+      document.getElementById(`task-meta-${id}`).style.display = 'block';
+      const detailsEl = document.getElementById(`task-details-${id}`);
+      if (detailsEl) detailsEl.style.display = 'block';
+      document.getElementById(`task-edit-${id}`).style.display = 'none';
+    }
+
+    async function saveTask(id) {
+      const form = new FormData();
+      form.append('title', document.getElementById(`task-edit-title-${id}`).value);
+      form.append('points_awarded', document.getElementById(`task-edit-points-${id}`).value);
+      form.append('created_at', document.getElementById(`task-edit-created-${id}`).value);
+      form.append('approved_at', document.getElementById(`task-edit-approved-${id}`).value);
+      form.append('details', document.getElementById(`task-edit-details-${id}`).value);
+
+      const res = await fetch(`/instances/${id}/edit-archive`, {method: 'POST', body: form});
+      if (res.ok) {
+        location.reload();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to save');
+      }
+    }
+  </script>
 {% endblock %}

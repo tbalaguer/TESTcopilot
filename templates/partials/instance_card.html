@@ -1,6 +1,6 @@
 <div class="card ticketCard" data-instance-id="{{inst.id}}">
   <div class="row" style="align-items:center;">
-    <div style="font-weight:900;">{{inst.template.title}}</div>
+    <div style="font-weight:900;">{{inst.title if inst.title else inst.template.title}}</div>
     <div class="spacer"></div>
     <div class="pill small">{{inst.points_awarded}} pts</div>
   </div>
@@ -10,14 +10,15 @@
     {{inst.assigned_kid.name}}
   </div>
 
+  <div class="muted" style="margin-top:2px; font-size:0.85em;">Added: {{ inst.created_at | format_date }}</div>
+
+  <!-- Display Details (read-only) for non-done cards -->
   {% if inst.status.value != "done" %}
-    <label class="muted" style="display:block;margin-top:8px;">Details (editable)</label>
-    <textarea
-      data-details-for="{{inst.id}}"
-      onblur="saveDetails({{inst.id}})"
-      placeholder="e.g., Cleaned the car / vacuumed the rug"
-    >{{inst.details}}</textarea>
+    {% if inst.details %}
+      <div class="muted" style="margin-top:8px;"><strong>Details:</strong> {{inst.details}}</div>
+    {% endif %}
   {% else %}
+    <!-- Display Details for done cards -->
     {% if inst.details %}
       <div class="muted" style="margin-top:8px;"><strong>Details:</strong> {{inst.details}}</div>
     {% endif %}
@@ -41,7 +42,7 @@
       <form method="post" action="{{ url_for('approve_route', instance_id=inst.id) }}">
         <input type="hidden" name="acting_kid" value="{{ acting_kid }}">
         <input type="hidden" name="pool" value="{{ '1' if pool_visible else '0' }}">
-        <button class="btn primary" type="submit">Approve</button>
+        <button class="btn primary" type="submit" style="background:#22c55e; color:white;">Approve</button>
       </form>
       <form method="post" action="{{ url_for('reject_route', instance_id=inst.id) }}">
         <input type="hidden" name="acting_kid" value="{{ acting_kid }}">
@@ -55,14 +56,95 @@
     </div>
   {% endif %}
 
-  {% if gm_unlocked %}
+  <!-- Edit and Delete buttons - available for Game Master OR for non-done cards -->
+  {% if gm_unlocked or inst.status.value != "done" %}
     <div class="row" style="margin-top:10px;">
-      <form method="post" action="{{ url_for('delete_instance', instance_id=inst.id) }}"
-            onsubmit="return confirm('Delete this ticket? This will also remove linked points ledger entries.');">
-        <input type="hidden" name="acting_kid" value="{{ acting_kid }}">
-        <input type="hidden" name="pool" value="{{ '1' if pool_visible else '0' }}">
-        <button class="btn danger" type="submit">Delete</button>
-      </form>
+      {% if gm_unlocked %}
+        <form method="post" action="{{ url_for('delete_instance', instance_id=inst.id) }}"
+              onsubmit="return confirm('Delete this ticket? This will also remove linked points ledger entries.');">
+          <input type="hidden" name="acting_kid" value="{{ acting_kid }}">
+          <input type="hidden" name="pool" value="{{ '1' if pool_visible else '0' }}">
+          <button class="btn danger" type="submit">Delete</button>
+        </form>
+      {% endif %}
+      <button class="btn" type="button" onclick="toggleCardEdit({{inst.id}})" style="background:#3b82f6; color:white;">Edit</button>
+    </div>
+
+    <!-- Edit form (hidden by default) -->
+    <div id="cardEdit_{{inst.id}}" style="display:none; margin-top:10px;" class="stack">
+      {% if gm_unlocked %}
+        <div>
+          <label class="muted">Title</label>
+          <input id="editTitle_{{inst.id}}" type="text" value="{{inst.title if inst.title else inst.template.title}}" />
+        </div>
+        <div>
+          <label class="muted">Points</label>
+          <input id="editPoints_{{inst.id}}" type="number" min="0" value="{{inst.points_awarded}}" />
+        </div>
+        <div>
+          <label class="muted">Player</label>
+          <select id="editKid_{{inst.id}}">
+            {% for k in kids %}
+              <option value="{{k.id}}" {% if k.id == inst.assigned_kid_id %}selected{% endif %}>{{k.name}}</option>
+            {% endfor %}
+          </select>
+        </div>
+      {% endif %}
+
+      <!-- Details field - available for everyone -->
+      <div>
+        <label class="muted">Details</label>
+        <textarea
+          id="editDetails_{{inst.id}}"
+          placeholder="e.g., Cleaned the car / vacuumed the rug"
+          rows="4"
+        >{{inst.details}}</textarea>
+      </div>
+
+      <div class="row">
+        <button class="btn primary" type="button" onclick="saveCardEdit({{inst.id}}, {{gm_unlocked|tojson}})">Save</button>
+        <button class="btn" type="button" onclick="toggleCardEdit({{inst.id}})">Cancel</button>
+      </div>
     </div>
   {% endif %}
 </div>
+
+<script>
+function toggleCardEdit(instId) {
+  const editDiv = document.getElementById(`cardEdit_${instId}`);
+  if (editDiv.style.display === 'none') {
+    editDiv.style.display = 'block';
+  } else {
+    editDiv.style.display = 'none';
+  }
+}
+
+async function saveCardEdit(instId, isGM) {
+  const form = new FormData();
+
+  // Only send title, points, and player if Game Master
+  if (isGM) {
+    const titleField = document.getElementById(`editTitle_${instId}`);
+    const pointsField = document.getElementById(`editPoints_${instId}`);
+    const kidField = document.getElementById(`editKid_${instId}`);
+
+    if (titleField) form.append('title', titleField.value);
+    if (pointsField) form.append('points_awarded', pointsField.value);
+    if (kidField) form.append('assigned_kid_id', kidField.value);
+  }
+
+  // Always send details (for both GM and Players)
+  const detailsField = document.getElementById(`editDetails_${instId}`);
+  if (detailsField) {
+    form.append('details', detailsField.value);
+  }
+
+  const res = await fetch(`/instances/${instId}/edit`, {method: 'POST', body: form});
+  if (res.ok) {
+    location.reload();
+  } else {
+    const data = await res.json().catch(() => ({error: 'Failed to save'}));
+    alert(data.error || 'Failed to save');
+  }
+}
+</script>
